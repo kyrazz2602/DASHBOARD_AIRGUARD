@@ -12,6 +12,7 @@ import { NotificationToast } from "@/components/notification-toast";
 import { WHO_STANDARDS, getStatusLabel } from "@/lib/sensor-data";
 import { useFilterEstimation } from "@/hooks/use-filter-estimation";
 import { useAuth } from "@/context/auth-context";
+import { User } from "firebase/auth";
 import {
   Wind,
   Droplets,
@@ -27,7 +28,7 @@ import { MobileNav } from "@/components/mobile-nav";
 export default function Dashboard({
   user,
 }: {
-  user: { email: string; name: string };
+  user: User;
 }) {
   const sensorData = useSensorData(3000);
 
@@ -120,7 +121,7 @@ export default function Dashboard({
           <div>
             <h1 className="text-3xl font-bold text-foreground tracking-tight">
               Welcome back,{" "}
-              <span className="text-primary">{user.name.split(" ")[0]}</span>
+              <span className="text-primary">{(user.displayName || user.email?.split("@")[0] || "User").split(" ")[0]}</span>
             </h1>
             <div className="flex items-center gap-2 text-muted-foreground mt-1">
               <Calendar className="w-4 h-4" />

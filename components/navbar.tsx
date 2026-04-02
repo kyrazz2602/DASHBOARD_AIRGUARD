@@ -109,7 +109,7 @@ export function Navbar() {
                 <div className="flex items-center gap-4">
                   <div className="text-right hidden lg:block">
                     <p className="text-sm font-semibold text-foreground leading-none">
-                      {user.name}
+                      {user.displayName || user.email?.split("@")[0] || "User"}
                     </p>
                     <p className="text-xs text-muted-foreground mt-1">
                       {user.email}
@@ -215,7 +215,7 @@ export function Navbar() {
                   </div>
                   <div className="overflow-hidden">
                     <p className="text-sm font-semibold text-foreground truncate">
-                      {user.name}
+                      {user.displayName || user.email?.split("@")[0] || "User"}
                     </p>
                     <p className="text-xs text-muted-foreground truncate">
                       {user.email}
