@@ -14,9 +14,15 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase (only once)
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
-const database = getDatabase(app);
-const auth = getAuth(app);
+let app;
+try {
+  app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+} catch (error) {
+  console.warn("Firebase initialization skipped or failed (likely during build):", error);
+}
+
+const database = app ? getDatabase(app) : ({} as any);
+const auth = app ? getAuth(app) : ({} as any);
 const googleProvider = new GoogleAuthProvider();
 
 export { database, ref, onValue, off, set, get, auth, googleProvider };
