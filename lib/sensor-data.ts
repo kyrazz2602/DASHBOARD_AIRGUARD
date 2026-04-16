@@ -21,7 +21,7 @@ export interface HistoricalData {
 
 // WHO Air Quality Guidelines (μg/m³)
 export const WHO_STANDARDS = {
-  PM2_5: { safe: 15, warning: 35, danger: 55 },
+  PM2_5: { safe: 15, warning: 35, danger: 75 },
   PM10: { safe: 45, warning: 75, danger: 150 },
   CO: { safe: 10, warning: 20, danger: 50 },
   VOC: { safe: 5, warning: 10, danger: 20 },
@@ -59,7 +59,10 @@ export function generateHistoricalData(days: number): HistoricalData[] {
       data.push({
         timestamp,
         pm25: Math.max(0, 10 + Math.sin(dayOffset / 2) * 5 + Math.random() * 4),
-        pm10: Math.max(0, 18 + Math.cos(dayOffset / 2.5) * 8 + Math.random() * 5),
+        pm10: Math.max(
+          0,
+          18 + Math.cos(dayOffset / 2.5) * 8 + Math.random() * 5,
+        ),
         co: Math.max(0, 15 + Math.sin(dayOffset / 3) * 7 + Math.random() * 3),
         voc: Math.max(0, 8 + Math.cos(dayOffset / 2.2) * 4 + Math.random() * 2),
         suhu: Math.max(0, 25 + Math.sin(dayOffset / 4) * 3 + Math.random() * 2),
@@ -73,7 +76,7 @@ export function generateHistoricalData(days: number): HistoricalData[] {
 
 export function getStatusColor(
   value: number,
-  type: keyof typeof WHO_STANDARDS
+  type: keyof typeof WHO_STANDARDS,
 ): string {
   const standard = WHO_STANDARDS[type];
   if (value <= standard.safe) return "bg-green-500";
@@ -83,7 +86,7 @@ export function getStatusColor(
 
 export function getStatusLabel(
   value: number,
-  type: keyof typeof WHO_STANDARDS
+  type: keyof typeof WHO_STANDARDS,
 ): string {
   const standard = WHO_STANDARDS[type];
   if (value <= standard.safe) return "Safe";
@@ -116,4 +119,32 @@ export function detectRecommendedFanSpeed(data: SensorReading): FanSpeed {
 
   // All sensors in safe range
   return "low";
+}
+
+// ML Filter Estimation Types
+
+export type FilterStatus = "Aman" | "Perhatian" | "Ganti Filter";
+
+export interface FilterProbabilities {
+  aman: number; // 0-1
+  perhatian: number; // 0-1
+  gantiFilter: number; // 0-1
+}
+
+export interface SensorFeatures {
+  pm25: number; // μg/m³
+  pm10: number; // μg/m³
+  co: number; // ppm
+  voc: number; // ppm
+  suhu: number; // °C
+}
+
+export interface MLPredictionResult {
+  status: FilterStatus;
+  probabilities: FilterProbabilities;
+  recommendation: string;
+  confidence: number; // 0-1, probabilitas kelas tertinggi
+  modelUsed: string;
+  latencyMs: number;
+  predictedAt: Date;
 }

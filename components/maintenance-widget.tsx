@@ -11,9 +11,13 @@ import {
   Battery,
   RefreshCcw,
   Loader2,
+  WifiOff,
+  Brain,
+  Info,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import type { FilterStatus, FilterProbabilities } from "@/lib/sensor-data";
 
 interface MaintenanceWidgetProps {
   filterHealth?: number; // 0 - 100
@@ -23,6 +27,14 @@ interface MaintenanceWidgetProps {
   currentPm25?: number; // Untuk menghitung beban kerja
   temperature?: number; // Celcius
   batteryLevel?: number; // 0 - 100
+
+  // ML props
+  mlStatus?: FilterStatus | null;
+  probabilities?: FilterProbabilities | null;
+  recommendation?: string | null;
+  confidence?: number | null;
+  isMLAvailable?: boolean;
+  isPredicting?: boolean;
 }
 
 export function MaintenanceWidget({
@@ -33,13 +45,21 @@ export function MaintenanceWidget({
   currentPm25 = 0,
   temperature = 28,
   batteryLevel = 100,
+  mlStatus = null,
+  probabilities = null,
+  recommendation = null,
+  confidence = null,
+  isMLAvailable = false,
+  isPredicting = false,
 }: MaintenanceWidgetProps) {
   // 1. Status Config (Memoized)
   const status = useMemo(() => {
     if (filterHealth > 70) {
       return {
         theme: "emerald",
-        icon: <CheckCircle2 className="w-5 h-5 text-emerald-500 dark:text-emerald-400" />,
+        icon: (
+          <CheckCircle2 className="w-5 h-5 text-emerald-500 dark:text-emerald-400" />
+        ),
         title: "System Healthy",
         message: "Filter is optimal",
         styles: {
@@ -51,7 +71,9 @@ export function MaintenanceWidget({
     } else if (filterHealth > 30) {
       return {
         theme: "orange",
-        icon: <AlertCircle className="w-5 h-5 text-orange-500 dark:text-orange-400" />,
+        icon: (
+          <AlertCircle className="w-5 h-5 text-orange-500 dark:text-orange-400" />
+        ),
         title: "Maintenance Soon",
         message: "Efficiency dropping",
         styles: {
@@ -78,27 +100,103 @@ export function MaintenanceWidget({
   // 3. Load Status (Memoized)
   const loadStatus = useMemo(() => {
     if (currentPm25 > 50)
-      return { text: "Danger", color: "text-red-600 bg-red-100 dark:text-red-400 dark:bg-red-900/30" };
+      return {
+        text: "Danger",
+        color: "text-red-600 bg-red-100 dark:text-red-400 dark:bg-red-900/30",
+      };
     if (currentPm25 > 20)
-      return { text: "Moderate", color: "text-orange-600 bg-orange-100 dark:text-orange-400 dark:bg-orange-900/30" };
-    return { text: "Normal", color: "text-emerald-600 bg-emerald-100 dark:text-emerald-400 dark:bg-emerald-900/30" };
+      return {
+        text: "Moderate",
+        color:
+          "text-orange-600 bg-orange-100 dark:text-orange-400 dark:bg-orange-900/30",
+      };
+    return {
+      text: "Normal",
+      color:
+        "text-emerald-600 bg-emerald-100 dark:text-emerald-400 dark:bg-emerald-900/30",
+    };
   }, [currentPm25]);
 
-  // 4. Battery Status (Memoized - Baru)
+  // 4. Battery Status (Memoized)
   const batteryStatus = useMemo(() => {
     if (batteryLevel > 50)
-      return { color: "text-emerald-600 dark:text-emerald-400", bg: "bg-emerald-100 dark:bg-emerald-900/30" };
+      return {
+        color: "text-emerald-600 dark:text-emerald-400",
+        bg: "bg-emerald-100 dark:bg-emerald-900/30",
+      };
     if (batteryLevel > 20)
-      return { color: "text-orange-600 dark:text-orange-400", bg: "bg-orange-100 dark:bg-orange-900/30" };
-    return { color: "text-red-600 dark:text-red-400", bg: "bg-red-100 dark:bg-red-900/30" };
+      return {
+        color: "text-orange-600 dark:text-orange-400",
+        bg: "bg-orange-100 dark:bg-orange-900/30",
+      };
+    return {
+      color: "text-red-600 dark:text-red-400",
+      bg: "bg-red-100 dark:bg-red-900/30",
+    };
   }, [batteryLevel]);
+
+  // ML Status Badge config
+  const mlStatusBadge = useMemo(() => {
+    if (!mlStatus) return null;
+    switch (mlStatus) {
+      case "Aman":
+        return {
+          text: "ML: Aman",
+          color:
+            "text-emerald-600 bg-emerald-100 dark:text-emerald-400 dark:bg-emerald-900/30",
+        };
+      case "Perhatian":
+        return {
+          text: "ML: Perhatian",
+          color:
+            "text-orange-600 bg-orange-100 dark:text-orange-400 dark:bg-orange-900/30",
+        };
+      case "Ganti Filter":
+        return {
+          text: "ML: Ganti Filter",
+          color: "text-red-600 bg-red-100 dark:text-red-400 dark:bg-red-900/30",
+        };
+    }
+  }, [mlStatus]);
+
+  // Probability bar configs
+  const probabilityBars = useMemo(() => {
+    if (!probabilities) return null;
+    return [
+      {
+        label: "Aman",
+        value: probabilities.aman,
+        barColor: "bg-emerald-500 dark:bg-emerald-600",
+        textColor: "text-emerald-700 dark:text-emerald-300",
+      },
+      {
+        label: "Perhatian",
+        value: probabilities.perhatian,
+        barColor: "bg-orange-500 dark:bg-orange-600",
+        textColor: "text-orange-700 dark:text-orange-300",
+      },
+      {
+        label: "Ganti Filter",
+        value: probabilities.gantiFilter,
+        barColor: "bg-red-500 dark:bg-red-600",
+        textColor: "text-red-700 dark:text-red-300",
+      },
+    ];
+  }, [probabilities]);
+
+  const showMLSection = isMLAvailable;
+  const showProbabilities =
+    showMLSection && probabilities !== null && probabilities !== undefined;
+  const showRecommendation =
+    showMLSection && recommendation !== null && recommendation !== undefined;
 
   return (
     <Card
       className={cn(
         "p-5 border shadow-sm transition-all duration-300 hover:shadow-md",
-        status.styles.bg
-      )}>
+        status.styles.bg,
+      )}
+    >
       {/* --- Bagian Atas: Filter Status --- */}
       <div className="flex justify-between items-start mb-4">
         <div className="flex gap-3">
@@ -109,24 +207,53 @@ export function MaintenanceWidget({
             <h3 className={cn("font-bold text-sm", status.styles.text)}>
               {status.title}
             </h3>
-            <p className="text-xs text-muted-foreground dark:text-muted-foreground/80">{status.message}</p>
+            <p className="text-xs text-muted-foreground dark:text-muted-foreground/80">
+              {status.message}
+            </p>
           </div>
         </div>
 
-        {/* Load Badge */}
-        <div
-          className={cn(
-            "px-2 py-1 rounded-full text-[10px] font-bold flex items-center gap-1 border border-black/5 dark:border-white/10",
-            loadStatus.color
-          )}>
-          <Activity className="w-3 h-3" />
-          {loadStatus.text}
+        {/* Badges: Load + ML status / ML Offline */}
+        <div className="flex items-center gap-1.5 flex-wrap justify-end">
+          {/* Load Badge */}
+          <div
+            className={cn(
+              "px-2 py-1 rounded-full text-[10px] font-bold flex items-center gap-1 border border-black/5 dark:border-white/10",
+              loadStatus.color,
+            )}
+          >
+            <Activity className="w-3 h-3" />
+            {loadStatus.text}
+          </div>
+
+          {/* ML Status Badge or ML Offline Badge */}
+          {isMLAvailable &&
+          mlStatus !== null &&
+          mlStatus !== undefined &&
+          mlStatusBadge ? (
+            <div
+              className={cn(
+                "px-2 py-1 rounded-full text-[10px] font-bold flex items-center gap-1 border border-black/5 dark:border-white/10",
+                mlStatusBadge.color,
+              )}
+            >
+              <Brain className="w-3 h-3" />
+              {mlStatusBadge.text}
+            </div>
+          ) : !isMLAvailable ? (
+            <div className="px-2 py-1 rounded-full text-[10px] font-bold flex items-center gap-1 border border-black/5 dark:border-white/10 text-gray-500 bg-gray-100 dark:text-gray-400 dark:bg-gray-800/50">
+              <WifiOff className="w-3 h-3" />
+              ML Offline
+            </div>
+          ) : null}
         </div>
       </div>
 
       <div className="space-y-1.5 mb-5">
         <div className="flex justify-between text-xs font-medium">
-          <span className="text-muted-foreground dark:text-muted-foreground/80">Filter Integrity</span>
+          <span className="text-muted-foreground dark:text-muted-foreground/80">
+            Filter Integrity
+          </span>
           <span className={status.styles.text}>{filterHealth}%</span>
         </div>
 
@@ -134,7 +261,7 @@ export function MaintenanceWidget({
           <div
             className={cn(
               "h-full transition-all duration-700 ease-out rounded-full",
-              status.styles.bar
+              status.styles.bar,
             )}
             style={{ width: `${filterHealth}%` }}
           />
@@ -163,7 +290,62 @@ export function MaintenanceWidget({
         </div>
       </div>
 
-      {/* --- Bagian Bawah: Sensor Stats (Baru) --- */}
+      {/* --- ML Section: Probability Bars / Skeleton / Recommendation --- */}
+      {showMLSection && (
+        <div className="border-t border-black/5 dark:border-white/10 pt-4 mb-4 space-y-3">
+          {/* Section Title */}
+          <div className="flex items-center gap-1.5">
+            <Brain className="w-3.5 h-3.5 text-muted-foreground dark:text-muted-foreground/80" />
+            <span className="text-xs font-semibold text-muted-foreground dark:text-muted-foreground/80">
+              Prediksi ML
+            </span>
+          </div>
+
+          {/* Loading Skeleton */}
+          {isPredicting ? (
+            <div className="space-y-2 animate-pulse">
+              <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded-full w-full" />
+              <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded-full w-full" />
+              <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded-full w-full" />
+            </div>
+          ) : showProbabilities && probabilityBars ? (
+            /* Probability Bars */
+            <div className="space-y-2">
+              {probabilityBars.map((bar) => (
+                <div key={bar.label} className="space-y-0.5">
+                  <div className="flex justify-between items-center text-[10px] font-medium">
+                    <span className={bar.textColor}>{bar.label}</span>
+                    <span className={bar.textColor}>
+                      {(bar.value * 100).toFixed(0)}%
+                    </span>
+                  </div>
+                  <div className="h-1.5 w-full bg-black/5 dark:bg-white/10 rounded-full overflow-hidden">
+                    <div
+                      className={cn(
+                        "h-full transition-all duration-700 ease-out rounded-full",
+                        bar.barColor,
+                      )}
+                      style={{ width: `${(bar.value * 100).toFixed(0)}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : null}
+
+          {/* Recommendation */}
+          {!isPredicting && showRecommendation && (
+            <div className="flex gap-2 bg-white/50 dark:bg-card/50 border border-black/5 dark:border-white/10 rounded-lg p-2.5">
+              <Info className="w-3.5 h-3.5 text-muted-foreground dark:text-muted-foreground/80 mt-0.5 shrink-0" />
+              <p className="text-[10px] text-muted-foreground dark:text-muted-foreground/80 leading-relaxed">
+                {recommendation}
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* --- Bagian Bawah: Sensor Stats --- */}
       <div className="grid grid-cols-2 gap-3 pt-4 border-t border-black/5 dark:border-white/10">
         {/* Suhu */}
         <div className="flex items-center gap-3 bg-white/50 dark:bg-card/50 p-2 rounded-lg border border-black/5 dark:border-white/10">
@@ -174,7 +356,9 @@ export function MaintenanceWidget({
             <p className="text-[10px] text-muted-foreground dark:text-muted-foreground/80 font-medium">
               Temp
             </p>
-            <p className="text-sm font-bold text-slate-700 dark:text-slate-300">{temperature}°C</p>
+            <p className="text-sm font-bold text-slate-700 dark:text-slate-300">
+              {temperature}°C
+            </p>
           </div>
         </div>
 
@@ -184,15 +368,18 @@ export function MaintenanceWidget({
             className={cn(
               "p-1.5 rounded-md transition-colors",
               batteryStatus.bg,
-              batteryStatus.color
-            )}>
+              batteryStatus.color,
+            )}
+          >
             <Battery className="w-4 h-4" />
           </div>
           <div>
             <p className="text-[10px] text-muted-foreground dark:text-muted-foreground/80 font-medium">
               Battery
             </p>
-            <p className="text-sm font-bold text-slate-700 dark:text-slate-300">{batteryLevel}%</p>
+            <p className="text-sm font-bold text-slate-700 dark:text-slate-300">
+              {batteryLevel}%
+            </p>
           </div>
         </div>
       </div>

@@ -66,7 +66,8 @@ export function ControlsSection({
     const colors: Record<FanSpeed, string> = {
       off: "bg-slate-500 text-white border-slate-600 shadow-sm",
       low: "bg-blue-500 text-white border-blue-600 shadow-md shadow-blue-500/20",
-      normal: "bg-cyan-500 text-white border-cyan-600 shadow-md shadow-cyan-500/20",
+      normal:
+        "bg-cyan-500 text-white border-cyan-600 shadow-md shadow-cyan-500/20",
       high: "bg-red-500 text-white border-red-600 shadow-md shadow-red-500/20",
     };
     return colors[speed];
@@ -104,9 +105,9 @@ export function ControlsSection({
           )}
 
           {/* Header */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 sm:mb-6 gap-3">
             <div>
-              <h3 className="font-bold text-foreground text-lg tracking-tight flex items-center gap-2 flex-wrap">
+              <h3 className="font-bold text-foreground text-base sm:text-lg tracking-tight flex items-center gap-2 flex-wrap">
                 FAN CONTROL
                 {isAutoMode && (
                   <Badge
@@ -114,7 +115,7 @@ export function ControlsSection({
                     className="bg-green-100 text-green-700 border-green-200 gap-1"
                   >
                     <Zap className="w-3 h-3 fill-current" />
-                    AUTO ACTIVE
+                    AUTO
                   </Badge>
                 )}
                 {/* Firebase connectivity indicator */}
@@ -140,15 +141,15 @@ export function ControlsSection({
                   <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
                 )}
               </h3>
-              <p className="text-sm text-muted-foreground mt-1">
+              <p className="text-xs sm:text-sm text-muted-foreground mt-1">
                 {isAutoMode
-                  ? "Kecepatan kipas diatur otomatis berdasarkan kualitas udara dari Realtime Monitoring."
+                  ? "Kecepatan kipas diatur otomatis berdasarkan kualitas udara."
                   : "Kontrol manual aktif. Pilih kecepatan di bawah."}
               </p>
             </div>
 
             {/* Auto Mode Switch */}
-            <div className="flex items-center space-x-3 bg-muted/50 p-2 rounded-lg border">
+            <div className="flex items-center space-x-3 bg-muted/50 p-2 rounded-lg border self-start sm:self-auto">
               <span
                 className={`text-sm font-medium ${
                   isAutoMode ? "text-primary" : "text-muted-foreground"
@@ -199,25 +200,24 @@ export function ControlsSection({
             </div>
 
             {/* Control Buttons */}
-            <div className="grid grid-cols-4 gap-3 relative">
+            <div className="grid grid-cols-4 gap-2 sm:gap-3 relative">
               {/* Lock Overlay saat Auto Mode */}
               {isAutoMode && (
                 <div className="absolute inset-0 z-10 bg-background/60 backdrop-blur-[1px] flex items-center justify-center rounded-lg border border-dashed border-muted-foreground/20 cursor-not-allowed">
-                  <div className="bg-background/90 px-4 py-2 rounded-full shadow-sm border flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                    <Lock className="w-4 h-4" />
+                  <div className="bg-background/90 px-3 py-1.5 sm:px-4 sm:py-2 rounded-full shadow-sm border flex items-center gap-2 text-xs sm:text-sm font-medium text-muted-foreground">
+                    <Lock className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                     Controls Locked
                   </div>
                 </div>
               )}
 
-              {(["off", "low", "normal", "high"] as FanSpeed[]).map(
-                (speed) => (
-                  <button
-                    key={speed}
-                    onClick={() => handleManualChange(speed)}
-                    disabled={isAutoMode || isSyncing}
-                    className={`
-                      relative group flex flex-col items-center justify-center py-4 rounded-xl transition-all duration-200 border
+              {(["off", "low", "normal", "high"] as FanSpeed[]).map((speed) => (
+                <button
+                  key={speed}
+                  onClick={() => handleManualChange(speed)}
+                  disabled={isAutoMode || isSyncing}
+                  className={`
+                      relative group flex flex-col items-center justify-center py-4 sm:py-4 rounded-xl transition-all duration-200 border min-h-[72px] sm:min-h-[80px]
                       ${getStatusColor(speed, fanSpeed === speed)}
                       ${
                         !isAutoMode && fanSpeed !== speed
@@ -225,16 +225,15 @@ export function ControlsSection({
                           : ""
                       }
                     `}
-                  >
-                    {speed !== "off" && (
-                      <Wind className="w-5 h-5 mb-2 opacity-80" />
-                    )}
-                    <span className="text-xs font-bold uppercase tracking-wide">
-                      {speed}
-                    </span>
-                  </button>
-                )
-              )}
+                >
+                  {speed !== "off" && (
+                    <Wind className="w-4 h-4 sm:w-5 sm:h-5 mb-1.5 sm:mb-2 opacity-80" />
+                  )}
+                  <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wide">
+                    {speed}
+                  </span>
+                </button>
+              ))}
             </div>
           </div>
         </Card>

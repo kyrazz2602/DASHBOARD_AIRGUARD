@@ -23,24 +23,31 @@ export function SensorCard({
 
   return (
     <Card
-      className={`p-6 bg-card shadow-sm hover:shadow-md transition-all ${
+      className={`p-4 sm:p-6 bg-card shadow-sm hover:shadow-md transition-all ${
         className ?? ""
-      }`}>
-      <div className="flex items-start justify-between mb-4">
-        <div className="text-muted-foreground font-medium">{label}</div>
-        <div className="text-2xl text-muted-foreground opacity-60">{icon}</div>
+      }`}
+    >
+      <div className="flex items-start justify-between mb-2 sm:mb-4">
+        <div className="text-muted-foreground font-medium text-sm sm:text-base">
+          {label}
+        </div>
+        <div className="text-lg sm:text-2xl text-muted-foreground opacity-60">
+          {icon}
+        </div>
       </div>
-      <div className="mb-3">
-        <div className="text-4xl font-bold text-foreground tracking-tight">
+      <div className="mb-2 sm:mb-3">
+        <div className="text-2xl sm:text-4xl font-bold text-foreground tracking-tight">
           {value.toFixed(1)}
         </div>
-        <div className="text-sm text-muted-foreground mt-1 font-medium">
+        <div className="text-xs sm:text-sm text-muted-foreground mt-0.5 sm:mt-1 font-medium">
           {unit}
         </div>
       </div>
-      <div className="flex items-center gap-2">
-        <div className={`w-2.5 h-2.5 rounded-full shadow-sm ${statusColor}`} />
-        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+      <div className="flex items-center gap-1.5 sm:gap-2">
+        <div
+          className={`w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full shadow-sm ${statusColor}`}
+        />
+        <span className="text-[10px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-wide">
           {statusLabel}
         </span>
       </div>
