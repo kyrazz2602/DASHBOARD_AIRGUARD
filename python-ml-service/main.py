@@ -12,6 +12,7 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 import numpy as np
+import pandas as pd
 from fastapi import FastAPI, Request
 from pydantic import BaseModel
 
@@ -119,7 +120,6 @@ async def predict(request: PredictRequest) -> Any:
     scaler = loader.scaler
 
     # Build feature vector using DataFrame to avoid feature name warnings
-    import pandas as pd
     feature_names = ["PM2.5", "PM10", "CO (ppm)", "VOC (ppm)", "Suhu (°C)"]
     feature_df = pd.DataFrame(
         [[request.pm25, request.pm10, request.co, request.voc, request.suhu]],
