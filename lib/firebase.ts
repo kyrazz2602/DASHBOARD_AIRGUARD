@@ -14,15 +14,28 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase (only once)
-let app;
+let app = null;
 try {
-  app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+  // Only initialize if we have at least the API config
+  if (firebaseConfig.apiKey) {
+    app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+  }
 } catch (error) {
   console.warn("Firebase initialization skipped or failed (likely during build):", error);
 }
 
-const database = app ? getDatabase(app) : ({} as any);
-const auth = app ? getAuth(app) : ({} as any);
+let database = {} as any;
+let auth = {} as any;
+
+try {
+  if (app) {
+    database = getDatabase(app);
+    auth = getAuth(app);
+  }
+} catch (error) {
+  console.warn("Firebase services init error:", error);
+}
+
 const googleProvider = new GoogleAuthProvider();
 
 export { database, ref, onValue, off, set, get, auth, googleProvider };
