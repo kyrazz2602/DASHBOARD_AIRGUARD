@@ -90,6 +90,31 @@ export function useMLFilterEstimation(): MLFilterEstimationResult {
 
   /** Stores the SensorFeatures used in the last successful prediction. */
   const lastFeatures = useRef<SensorFeatures | null>(null);
+  /** Tracks whether ML is currently known to be unavailable (for retry logic). */
+  const mlUnavailable = useRef<boolean>(false);
+
+  // ── Health check: retry when ML was previously unavailable ───────────────
+
+  useEffect(() => {
+    if (!mlUnavailable.current) return;
+
+    // Poll every 30 seconds to check if ML service recovered
+    const intervalId = setInterval(async () => {
+      try {
+        const res = await fetch("/api/ml/health");
+        if (res.ok) {
+          // Service recovered — reset state so next sensor change triggers prediction
+          mlUnavailable.current = false;
+          lastFeatures.current = null;
+          setIsMLAvailable(true);
+        }
+      } catch {
+        // Still unavailable — keep polling
+      }
+    }, 30000);
+
+    return () => clearInterval(intervalId);
+  }, [isMLAvailable]);
 
   // ── 8.2 Debounced ML prediction effect ───────────────────────────────────
 
@@ -110,7 +135,8 @@ export function useMLFilterEstimation(): MLFilterEstimationResult {
       // ── 8.3 Cache check ────────────────────────────────────────────────────
       if (
         lastFeatures.current !== null &&
-        isCacheValid(features, lastFeatures.current)
+        isCacheValid(features, lastFeatures.current) &&
+        !mlUnavailable.current
       ) {
         // Sensor values haven't changed significantly — reuse cached prediction
         return;
@@ -126,6 +152,7 @@ export function useMLFilterEstimation(): MLFilterEstimationResult {
         setRecommendation(result.recommendation);
         setConfidence(result.confidence);
         setIsMLAvailable(true);
+        mlUnavailable.current = false;
         setError(null);
 
         // Update cache after a successful prediction
@@ -134,6 +161,7 @@ export function useMLFilterEstimation(): MLFilterEstimationResult {
         if (err instanceof MLServiceError) {
           if (err.code === "SERVICE_UNAVAILABLE" || err.code === "TIMEOUT") {
             // Fallback to rule-based status when ML service is down
+            mlUnavailable.current = true;
             setIsMLAvailable(false);
             setMlStatus(getRuleBasedStatus(features));
           } else if (err.code === "INVALID_INPUT") {

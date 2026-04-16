@@ -41,4 +41,4 @@ __pycache__/
 
 # Kiro IDE
 .kiro/settings/
-.vscode/
+.vscode

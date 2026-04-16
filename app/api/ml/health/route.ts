@@ -12,7 +12,7 @@ export async function GET() {
 
   // Forward health check to Python service with 3-second timeout
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 3000);
+  const timeoutId = setTimeout(() => controller.abort(), 8000);
 
   try {
     const pythonResponse = await fetch(`${mlServiceUrl}/health`, {
