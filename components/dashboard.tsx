@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
 import { useSensorData } from "@/hooks/use-sensor-data";
 import { SensorCard } from "@/components/sensor-card";
 import { DevicePanel } from "@/components/device-panel";
@@ -11,24 +10,23 @@ import { MaintenanceWidget } from "@/components/maintenance-widget";
 import { NotificationToast } from "@/components/notification-toast";
 import { WHO_STANDARDS, getStatusLabel } from "@/lib/sensor-data";
 import { useMLFilterEstimation } from "@/hooks/use-ml-filter-estimation";
-import { useAuth } from "@/context/auth-context";
 import { User } from "firebase/auth";
 import {
   Wind,
   Droplets,
   Flame,
   Leaf,
-  Calendar,
   ShieldCheck,
   AlertTriangle,
+  TriangleAlert,
 } from "lucide-react";
 import { Navbar } from "@/components/navbar";
 import { MobileNav } from "@/components/mobile-nav";
+import { cn } from "@/lib/utils";
 
 export default function Dashboard({ user }: { user: User }) {
   const sensorData = useSensorData(3000);
 
-  // --- DEVICE MAINTENANCE DATA ---
   const {
     healthPct,
     daysRemaining,
@@ -52,6 +50,12 @@ export default function Dashboard({ user }: { user: User }) {
     "Good" | "Warning" | "Danger"
   >("Good");
 
+  const firstName = (
+    user.displayName ||
+    user.email?.split("@")[0] ||
+    "User"
+  ).split(" ")[0];
+
   const today = new Date().toLocaleDateString("id-ID", {
     weekday: "long",
     year: "numeric",
@@ -63,9 +67,7 @@ export default function Dashboard({ user }: { user: User }) {
     const checks = [
       {
         condition: sensorData.pm25 > WHO_STANDARDS.PM2_5.warning,
-        message: `PM2.5 level is at ${sensorData.pm25.toFixed(
-          1,
-        )} μg/m³ - ${getStatusLabel(sensorData.pm25, "PM2_5")}!`,
+        message: `PM2.5 ${sensorData.pm25.toFixed(1)} μg/m³ — ${getStatusLabel(sensorData.pm25, "PM2_5")}`,
         type:
           sensorData.pm25 > WHO_STANDARDS.PM2_5.danger
             ? ("danger" as const)
@@ -73,9 +75,7 @@ export default function Dashboard({ user }: { user: User }) {
       },
       {
         condition: sensorData.co > WHO_STANDARDS.CO.warning,
-        message: `CO level is at ${sensorData.co.toFixed(
-          1,
-        )} ppm - ${getStatusLabel(sensorData.co, "CO")}!`,
+        message: `CO ${sensorData.co.toFixed(1)} ppm — ${getStatusLabel(sensorData.co, "CO")}`,
         type:
           sensorData.co > WHO_STANDARDS.CO.danger
             ? ("danger" as const)
@@ -83,17 +83,13 @@ export default function Dashboard({ user }: { user: User }) {
       },
       {
         condition: sensorData.voc > WHO_STANDARDS.VOC.warning,
-        message: `VOC level is at ${sensorData.voc.toFixed(
-          1,
-        )} ppm - ${getStatusLabel(sensorData.voc, "VOC")}!`,
+        message: `VOC ${sensorData.voc.toFixed(1)} ppm — ${getStatusLabel(sensorData.voc, "VOC")}`,
         type:
           sensorData.voc > WHO_STANDARDS.VOC.danger
             ? ("danger" as const)
             : ("warning" as const),
       },
     ];
-
-    const activeCheck = checks.find((check) => check.condition);
 
     if (checks.some((c) => c.type === "danger" && c.condition)) {
       setOverallStatus("Danger");
@@ -103,6 +99,7 @@ export default function Dashboard({ user }: { user: User }) {
       setOverallStatus("Good");
     }
 
+    const activeCheck = checks.find((c) => c.condition);
     if (activeCheck) {
       setNotification({
         message: activeCheck.message,
@@ -112,108 +109,107 @@ export default function Dashboard({ user }: { user: User }) {
     }
   }, [sensorData.pm25, sensorData.co, sensorData.voc]);
 
+  const statusConfig = {
+    Good: {
+      icon: <ShieldCheck className="w-4 h-4 sm:w-5 sm:h-5" />,
+      label: "Udara Bersih",
+      sublabel: "Semua parameter aman",
+      classes:
+        "bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400",
+    },
+    Warning: {
+      icon: <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5" />,
+      label: "Perhatian",
+      sublabel: "Ada parameter tinggi",
+      classes:
+        "bg-amber-500/10 border-amber-500/20 text-amber-600 dark:text-amber-400",
+    },
+    Danger: {
+      icon: <TriangleAlert className="w-4 h-4 sm:w-5 sm:h-5" />,
+      label: "Berbahaya",
+      sublabel: "Kualitas udara buruk",
+      classes: "bg-red-500/10 border-red-500/20 text-red-600 dark:text-red-400",
+    },
+  };
+
+  const sc = statusConfig[overallStatus];
+
   return (
-    <div className="min-h-screen bg-background selection:bg-primary/30">
-      <Navbar />
+    <div className="min-h-screen bg-background">
+      {/* Ambient background blobs */}
       <div className="fixed inset-0 -z-10 pointer-events-none overflow-hidden">
-        <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-primary/10 rounded-full blur-[120px]" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-blue-500/10 rounded-full blur-[120px]" />
+        <div className="absolute top-[-15%] left-[-10%] w-[600px] h-[600px] bg-primary/8 rounded-full blur-[140px]" />
+        <div className="absolute bottom-[-15%] right-[-10%] w-[500px] h-[500px] bg-blue-500/8 rounded-full blur-[140px]" />
       </div>
 
+      <Navbar />
       <MobileNav />
 
-      <main className="max-w-7xl mx-auto px-3 sm:px-4 md:px-8 py-4 md:py-8 pb-20 md:pb-12 space-y-4 md:space-y-8">
-        {/* --- WELCOME HEADER SECTION --- */}
-        <div className="flex items-center justify-between gap-3 animate-in slide-in-from-top-5 duration-500">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 py-6 md:py-8 pb-24 md:pb-10 space-y-6">
+        {/* ── Welcome Header ── */}
+        <div className="flex items-center justify-between gap-4 animate-in slide-in-from-top-4 duration-500">
           <div>
-            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-foreground tracking-tight">
-              Hi,{" "}
-              <span className="text-primary">
-                {
-                  (
-                    user.displayName ||
-                    user.email?.split("@")[0] ||
-                    "User"
-                  ).split(" ")[0]
-                }
-              </span>
+            <h1 className="text-2xl sm:text-3xl font-bold text-foreground tracking-tight">
+              Halo, <span className="text-primary">{firstName}</span> 👋
             </h1>
-            <div className="flex items-center gap-1.5 text-muted-foreground mt-0.5">
-              <Calendar className="w-3.5 h-3.5" />
-              <p className="text-xs font-medium">{today}</p>
-            </div>
+            <p className="text-sm text-muted-foreground mt-1">{today}</p>
           </div>
 
-          {/* Overall Status Badge — compact on mobile */}
+          {/* Air Quality Status Pill */}
           <div
-            className={`px-3 py-1.5 sm:px-5 sm:py-2 rounded-xl border backdrop-blur-md flex items-center gap-2 shadow-lg transition-colors shrink-0 ${
-              overallStatus === "Good"
-                ? "bg-green-500/10 border-green-500/20 text-green-600 dark:text-green-400"
-                : overallStatus === "Warning"
-                  ? "bg-yellow-500/10 border-yellow-500/20 text-yellow-600 dark:text-yellow-400"
-                  : "bg-red-500/10 border-red-500/20 text-red-600 dark:text-red-400"
-            }`}
-          >
-            {overallStatus === "Good" ? (
-              <ShieldCheck className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />
-            ) : (
-              <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />
+            className={cn(
+              "flex items-center gap-2.5 px-4 py-2.5 rounded-2xl border backdrop-blur-sm shadow-sm shrink-0 transition-colors duration-500",
+              sc.classes,
             )}
-            <div>
-              <p className="text-[9px] sm:text-xs font-semibold uppercase opacity-70 leading-none">
-                Air Quality
-              </p>
-              <p className="font-bold text-xs sm:text-sm leading-tight">
-                {overallStatus === "Good"
-                  ? "Excellent"
-                  : overallStatus === "Warning"
-                    ? "Warning"
-                    : "Dangerous"}
+          >
+            {sc.icon}
+            <div className="hidden sm:block">
+              <p className="text-xs font-bold leading-tight">{sc.label}</p>
+              <p className="text-[10px] opacity-70 leading-tight">
+                {sc.sublabel}
               </p>
             </div>
+            <span className="sm:hidden text-xs font-bold">{sc.label}</span>
           </div>
         </div>
 
-        {/* --- SENSOR CARDS — 2x2 grid on mobile --- */}
-        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 md:gap-4">
+        {/* ── Sensor Cards ── */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 animate-in slide-in-from-bottom-4 duration-500 delay-100">
           <SensorCard
             label="PM2.5"
             value={sensorData.pm25}
             unit="μg/m³"
             type="PM2_5"
-            icon={<Wind className="w-4 h-4 sm:w-5 sm:h-5" />}
-            className="transition-all duration-300 hover:-translate-y-1 hover:border-indigo-400 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/30 hover:shadow-lg hover:shadow-indigo-500/10"
+            icon={<Wind className="w-4 h-4" />}
           />
           <SensorCard
             label="PM10"
             value={sensorData.pm10}
             unit="μg/m³"
             type="PM10"
-            icon={<Droplets className="w-4 h-4 sm:w-5 sm:h-5" />}
-            className="transition-all duration-300 hover:-translate-y-1 hover:border-cyan-400 hover:bg-cyan-50/50 dark:hover:bg-cyan-950/30 hover:shadow-lg hover:shadow-cyan-500/10"
+            icon={<Droplets className="w-4 h-4" />}
           />
           <SensorCard
             label="CO"
             value={sensorData.co}
             unit="ppm"
             type="CO"
-            icon={<Flame className="w-4 h-4 sm:w-5 sm:h-5" />}
-            className="transition-all duration-300 hover:-translate-y-1 hover:border-rose-400 hover:bg-rose-50/50 dark:hover:bg-rose-950/30 hover:shadow-lg hover:shadow-rose-500/10"
+            icon={<Flame className="w-4 h-4" />}
           />
           <SensorCard
             label="VOC"
             value={sensorData.voc}
             unit="ppm"
             type="VOC"
-            icon={<Leaf className="w-4 h-4 sm:w-5 sm:h-5" />}
-            className="transition-all duration-300 hover:-translate-y-1 hover:border-emerald-400 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/30 hover:shadow-lg hover:shadow-emerald-500/10"
+            icon={<Leaf className="w-4 h-4" />}
           />
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 md:gap-6">
-          {/* --- LEFT SIDEBAR (Desktop only) --- */}
-          <div className="lg:col-span-3 order-2 lg:order-1 hidden lg:block">
-            <div className="sticky top-24 space-y-6">
+        {/* ── Main Grid ── */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+          {/* Left Sidebar — desktop only */}
+          <aside className="lg:col-span-3 hidden lg:flex flex-col gap-5">
+            <div className="sticky top-24 space-y-5">
               <DevicePanel name="AIRGUARD" status="Aktif" deviceId="DEV-001" />
               <MaintenanceWidget
                 filterHealth={healthPct}
@@ -231,29 +227,25 @@ export default function Dashboard({ user }: { user: User }) {
                 isPredicting={isPredicting}
               />
             </div>
-          </div>
+          </aside>
 
-          {/* --- MAIN CONTENT AREA --- */}
-          <div className="lg:col-span-9 space-y-4 md:space-y-6 order-1 lg:order-2">
-            {/* Device Panel — mobile only, compact */}
+          {/* Main Content */}
+          <div className="lg:col-span-9 space-y-5">
+            {/* Device Panel — mobile only */}
             <div className="lg:hidden">
               <DevicePanel name="AIRGUARD" status="Aktif" deviceId="DEV-001" />
             </div>
 
-            {/* Controls Section */}
+            {/* Controls */}
             <ControlsSection
               sensorData={sensorData}
-              onFanSpeedChange={(speed) => {
-                console.log("Speed changed:", speed);
-              }}
+              onFanSpeedChange={(speed) => console.log("Speed changed:", speed)}
             />
 
-            {/* Chart Section */}
-            <div className="min-h-[300px] md:min-h-[400px]">
-              <ChartSection />
-            </div>
+            {/* Chart */}
+            <ChartSection />
 
-            {/* Maintenance Widget — mobile only */}
+            {/* Maintenance — mobile only */}
             <div className="lg:hidden">
               <MaintenanceWidget
                 filterHealth={healthPct}
@@ -275,7 +267,6 @@ export default function Dashboard({ user }: { user: User }) {
         </div>
       </main>
 
-      {/* Notifications */}
       <NotificationToast
         message={notification.message}
         type={notification.type}

@@ -1,5 +1,6 @@
 import { Card } from "@/components/ui/card";
-import { getStatusColor, getStatusLabel } from "@/lib/sensor-data";
+import { getStatusLabel } from "@/lib/sensor-data";
+import { cn } from "@/lib/utils";
 
 interface SensorCardProps {
   label: string;
@@ -10,6 +11,33 @@ interface SensorCardProps {
   className?: string;
 }
 
+const STATUS_STYLES = {
+  Safe: {
+    dot: "bg-emerald-500",
+    text: "text-emerald-700 dark:text-emerald-300",
+    value: "text-emerald-700 dark:text-emerald-300",
+    glow: "shadow-emerald-500/10",
+  },
+  Warning: {
+    dot: "bg-amber-500",
+    text: "text-amber-700 dark:text-amber-300",
+    value: "text-amber-700 dark:text-amber-300",
+    glow: "shadow-amber-500/10",
+  },
+  Danger: {
+    dot: "bg-red-500",
+    text: "text-red-700 dark:text-red-300",
+    value: "text-red-700 dark:text-red-300",
+    glow: "shadow-red-500/10",
+  },
+};
+
+const STATUS_ID: Record<string, string> = {
+  Safe: "Aman",
+  Warning: "Perhatian",
+  Danger: "Bahaya",
+};
+
 export function SensorCard({
   label,
   value,
@@ -18,37 +46,46 @@ export function SensorCard({
   icon,
   className,
 }: SensorCardProps) {
-  const statusColor = getStatusColor(value, type);
-  const statusLabel = getStatusLabel(value, type);
+  const statusLabel = getStatusLabel(value, type) as keyof typeof STATUS_STYLES;
+  const styles = STATUS_STYLES[statusLabel] ?? STATUS_STYLES.Safe;
 
   return (
     <Card
-      className={`p-4 sm:p-6 bg-card shadow-sm hover:shadow-md transition-all ${
-        className ?? ""
-      }`}
+      className={cn(
+        "relative overflow-hidden p-4 sm:p-5 bg-card border border-border/60",
+        "hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5",
+        styles.glow,
+        className,
+      )}
     >
-      <div className="flex items-start justify-between mb-2 sm:mb-4">
-        <div className="text-muted-foreground font-medium text-sm sm:text-base">
+      {/* Label + icon */}
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
           {label}
-        </div>
-        <div className="text-lg sm:text-2xl text-muted-foreground opacity-60">
-          {icon}
-        </div>
+        </span>
+        <div className="text-muted-foreground/60">{icon}</div>
       </div>
-      <div className="mb-2 sm:mb-3">
-        <div className="text-2xl sm:text-4xl font-bold text-foreground tracking-tight">
+
+      {/* Value */}
+      <div className="mb-3">
+        <span
+          className={cn(
+            "text-2xl sm:text-3xl font-bold tabular-nums leading-none",
+            styles.value,
+          )}
+        >
           {value.toFixed(1)}
-        </div>
-        <div className="text-xs sm:text-sm text-muted-foreground mt-0.5 sm:mt-1 font-medium">
+        </span>
+        <span className="text-xs text-muted-foreground ml-1.5 font-medium">
           {unit}
-        </div>
+        </span>
       </div>
-      <div className="flex items-center gap-1.5 sm:gap-2">
-        <div
-          className={`w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full shadow-sm ${statusColor}`}
-        />
-        <span className="text-[10px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-          {statusLabel}
+
+      {/* Status */}
+      <div className="flex items-center gap-1.5">
+        <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", styles.dot)} />
+        <span className={cn("text-[11px] font-semibold", styles.text)}>
+          {STATUS_ID[statusLabel] ?? statusLabel}
         </span>
       </div>
     </Card>

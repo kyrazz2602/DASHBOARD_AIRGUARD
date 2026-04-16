@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Download, Calendar, Activity, Radio, Wifi, WifiOff } from "lucide-react";
+import { Download, Square, Circle, Calendar, Activity } from "lucide-react";
 import {
   AreaChart,
   Area,
@@ -15,22 +15,25 @@ import {
 } from "recharts";
 import { generateHistoricalData } from "@/lib/sensor-data";
 import { getHistoricalData, listenToSensorData } from "@/lib/firebase-data";
+import { cn } from "@/lib/utils";
+
+// ─── Sensor config ────────────────────────────────────────────────────────────
 
 const SENSOR_CONFIG = {
   pm25: {
     label: "PM2.5",
     color: "#8B5CF6",
     unit: "μg/m³",
-    description: "Particulate Matter",
-    min: 5, // Batas bawah simulasi
-    max: 60, // Batas atas simulasi
+    description: "Particulate Matter 2.5",
+    min: 0,
+    max: 60,
   },
   pm10: {
     label: "PM10",
     color: "#3B82F6",
     unit: "μg/m³",
-    description: "Particulate Matter",
-    min: 10,
+    description: "Particulate Matter 10",
+    min: 0,
     max: 80,
   },
   co: {
@@ -38,7 +41,7 @@ const SENSOR_CONFIG = {
     color: "#F59E0B",
     unit: "ppm",
     description: "Carbon Monoxide",
-    min: 1,
+    min: 0,
     max: 15,
   },
   voc: {
@@ -46,412 +49,527 @@ const SENSOR_CONFIG = {
     color: "#10B981",
     unit: "ppm",
     description: "Volatile Organic Compounds",
-    min: 0.1,
+    min: 0,
     max: 8,
   },
 } as const;
 
 type SensorType = keyof typeof SENSOR_CONFIG;
 
+// ─── CSV buffer row type ──────────────────────────────────────────────────────
+
+interface DataRow {
+  timestamp: number;
+  pm25: number;
+  pm10: number;
+  co: number;
+  voc: number;
+  suhu: number;
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
+
 export function ChartSection() {
-  const [timeRange, setTimeRange] = useState<"1h" | "3d" | "7d">("1h"); // Default ke 1h agar langsung kelihatan live
+  const [timeRange, setTimeRange] = useState<"1h" | "3d" | "7d">("1h");
   const [selectedSensor, setSelectedSensor] = useState<SensorType>("pm25");
-  const [data, setData] = useState<any[]>([]);
-  const [isExporting, setIsExporting] = useState(false);
+  const [chartData, setChartData] = useState<DataRow[]>([]);
   const [isFirebaseConnected, setIsFirebaseConnected] = useState(false);
 
-  // Ref untuk menyimpan timer interval agar bisa dibersihkan
+  // ── Recording state ──────────────────────────────────────────────────────
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordedCount, setRecordedCount] = useState(0);
+
+  /**
+   * csvBufferRef holds ALL rows captured during a recording session.
+   * Using a ref (not state) avoids re-renders on every Firebase update.
+   */
+  const csvBufferRef = useRef<DataRow[]>([]);
+
+  // ── Cleanup refs ─────────────────────────────────────────────────────────
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const firebaseCleanupRef = useRef<(() => void) | null>(null);
 
-  // 1. Inisialisasi Data Awal saat Time Range berubah
+  // ── 1. Load initial / historical data ────────────────────────────────────
   useEffect(() => {
     const daysMap = { "1h": 0.04, "3d": 3, "7d": 7 };
-    
-    // Try to fetch from Firebase first, fallback to simulated data
+
     const loadData = async () => {
       try {
-        // For all time ranges, try Firebase first
-        const firebaseData = await getHistoricalData(Math.ceil(daysMap[timeRange]));
-        
+        const firebaseData = await getHistoricalData(
+          Math.ceil(daysMap[timeRange]),
+        );
         if (firebaseData.length > 0) {
-          // Use Firebase data if available
-          const processedData = timeRange === "1h" 
-            ? firebaseData.slice(-50) // Ambil 50 data terakhir untuk 1h
-            : firebaseData.filter((_, i) => i % 6 === 0).slice(-50);
-          setData(processedData);
+          const rows: DataRow[] = firebaseData.map((d) => ({
+            timestamp: d.timestamp.getTime(),
+            pm25: d.pm25,
+            pm10: d.pm10,
+            co: d.co,
+            voc: d.voc,
+            suhu: d.suhu,
+          }));
+          const processed =
+            timeRange === "1h"
+              ? rows.slice(-50)
+              : rows.filter((_, i) => i % 6 === 0).slice(-50);
+          setChartData(processed);
           setIsFirebaseConnected(true);
           return;
         }
-      } catch (error) {
-        console.warn("Failed to load Firebase data, using simulated:", error);
+      } catch {
+        // fall through to simulated
       }
-      
-      // Fallback to simulated data
       setIsFirebaseConnected(false);
-      const initialData = generateHistoricalData(Math.ceil(daysMap[timeRange]));
-      const processedData =
+      const sim = generateHistoricalData(Math.ceil(daysMap[timeRange]));
+      const processed =
         timeRange === "1h"
-          ? initialData.slice(-30)
-          : initialData.filter((_, i) => i % 6 === 0).slice(-50);
-      setData(processedData);
+          ? sim.slice(-30)
+          : sim.filter((_, i) => i % 6 === 0).slice(-50);
+      setChartData(
+        processed.map((d) => ({
+          timestamp: d.timestamp.getTime(),
+          pm25: d.pm25,
+          pm10: d.pm10,
+          co: d.co,
+          voc: d.voc,
+          suhu: d.suhu,
+        })),
+      );
     };
-    
+
     loadData();
   }, [timeRange]);
 
-  // 2. Real-Time Update (Firebase or Simulated)
+  // ── 2. Real-time listener (live mode only) ────────────────────────────────
   useEffect(() => {
-    // Cleanup previous listeners/intervals
     if (intervalRef.current) clearInterval(intervalRef.current);
     if (firebaseCleanupRef.current) firebaseCleanupRef.current();
 
-    // Only activate 'Live' mode for "1h" range
-    if (timeRange === "1h") {
-      // Try Firebase real-time first
-      try {
-        firebaseCleanupRef.current = listenToSensorData(
-          (sensorData) => {
-            setIsFirebaseConnected(true);
-            setData((prevData) => {
-              if (prevData.length === 0) return prevData;
+    if (timeRange !== "1h") return;
 
-              const newPoint = {
-                timestamp: sensorData.timestamp.getTime(),
-                pm25: sensorData.pm25,
-                pm10: sensorData.pm10,
-                co: sensorData.co,
-                voc: sensorData.voc,
-                suhu: sensorData.suhu,
-              };
+    const handleNewPoint = (row: DataRow) => {
+      // Update chart
+      setChartData((prev) => {
+        if (prev.length === 0) return prev;
+        return [...prev.slice(-49), row];
+      });
 
-              // Add new point, remove oldest to maintain window size
-              return [...prevData.slice(1), newPoint];
-            });
-          },
-          (error) => {
-            console.error("Firebase real-time error:", error);
-            setIsFirebaseConnected(false);
-            // Fall back to simulated on error
-            startSimulatedUpdates();
-          }
-        );
-      } catch (error) {
-        console.warn("Failed to start Firebase listener, using simulated:", error);
-        setIsFirebaseConnected(false);
-        startSimulatedUpdates();
+      // Append to CSV buffer if recording
+      if (isRecording) {
+        csvBufferRef.current.push(row);
+        setRecordedCount(csvBufferRef.current.length);
       }
-    }
+    };
 
-    function startSimulatedUpdates() {
-      intervalRef.current = setInterval(() => {
-        setData((prevData) => {
-          if (prevData.length === 0) return prevData;
-
-          const lastPoint = prevData[prevData.length - 1];
-          const config = SENSOR_CONFIG[selectedSensor];
-
-          let newValue = lastPoint[selectedSensor] + (Math.random() - 0.5) * 5;
-          newValue = Math.max(config.min, Math.min(newValue, config.max));
-
-          const newPoint = {
-            ...lastPoint,
-            timestamp: Date.now(),
-            [selectedSensor]: newValue,
-            pm25:
-              selectedSensor === "pm25"
-                ? newValue
-                : Math.max(5, lastPoint.pm25 + (Math.random() - 0.5) * 2),
-            co:
-              selectedSensor === "co"
-                ? newValue
-                : Math.max(1, lastPoint.co + (Math.random() - 0.5) * 0.5),
-            suhu: lastPoint.suhu || 25 + (Math.random() - 0.5) * 3,
-          };
-
-          return [...prevData.slice(1), newPoint];
-        });
-      }, 2000);
+    try {
+      firebaseCleanupRef.current = listenToSensorData(
+        (sd) => {
+          setIsFirebaseConnected(true);
+          handleNewPoint({
+            timestamp: sd.timestamp.getTime(),
+            pm25: sd.pm25,
+            pm10: sd.pm10,
+            co: sd.co,
+            voc: sd.voc,
+            suhu: sd.suhu,
+          });
+        },
+        () => {
+          setIsFirebaseConnected(false);
+          // Simulated fallback
+          intervalRef.current = setInterval(() => {
+            const last = chartData[chartData.length - 1];
+            if (!last) return;
+            const row: DataRow = {
+              timestamp: Date.now(),
+              pm25: Math.max(0, last.pm25 + (Math.random() - 0.5) * 3),
+              pm10: Math.max(0, last.pm10 + (Math.random() - 0.5) * 4),
+              co: Math.max(0, last.co + (Math.random() - 0.5) * 0.5),
+              voc: Math.max(0, last.voc + (Math.random() - 0.5) * 0.3),
+              suhu: Math.max(0, last.suhu + (Math.random() - 0.5) * 0.5),
+            };
+            handleNewPoint(row);
+          }, 3000);
+        },
+      );
+    } catch {
+      setIsFirebaseConnected(false);
     }
 
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
       if (firebaseCleanupRef.current) firebaseCleanupRef.current();
     };
-  }, [timeRange, selectedSensor]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timeRange, isRecording]);
 
-  const handleExportData = async () => {
-    setIsExporting(true);
-    try {
-      let exportData: any[] = [];
-      
-      // Ambil data sesuai time range yang dipilih
-      if (timeRange === "1h") {
-        // Menggunakan data state secara langsung karena berisi data realtime murni
-        exportData = [...data];
-      } else {
-        // Untuk historical data, ambil fresh dari Firebase
-        const daysMap = { "3d": 3, "7d": 7 };
-        try {
-          const firebaseData = await getHistoricalData(daysMap[timeRange as "3d" | "7d"]);
-          if (firebaseData.length > 0) {
-            exportData = firebaseData.map(item => ({
-              timestamp: item.timestamp.getTime(),
-              pm25: item.pm25,
-              pm10: item.pm10,
-              co: item.co,
-              voc: item.voc,
-              suhu: item.suhu,
-            }));
-          } else {
-            // Fallback ke simulated data jika Firebase kosong
-            exportData = generateHistoricalData(daysMap[timeRange as "3d" | "7d"]).map(item => ({
-              timestamp: item.timestamp.getTime(),
-              pm25: item.pm25,
-              pm10: item.pm10,
-              co: item.co,
-              voc: item.voc,
-              suhu: item.suhu,
-            }));
-          }
-        } catch (error) {
-          console.warn("Failed to get Firebase data for export, using simulated:", error);
-          // Fallback ke simulated data
-          exportData = generateHistoricalData(daysMap[timeRange as "3d" | "7d"]).map(item => ({
-            timestamp: item.timestamp.getTime(),
-            pm25: item.pm25,
-            pm10: item.pm10,
-            co: item.co,
-            voc: item.voc,
-            suhu: item.suhu,
-          }));
-        }
+  // ── Recording controls ────────────────────────────────────────────────────
+
+  const startRecording = useCallback(() => {
+    csvBufferRef.current = [];
+    setRecordedCount(0);
+    setIsRecording(true);
+  }, []);
+
+  const stopAndExport = useCallback(() => {
+    setIsRecording(false);
+
+    const rows = csvBufferRef.current;
+    if (rows.length === 0) return;
+
+    const header = [
+      "Timestamp",
+      "Tanggal",
+      "Waktu",
+      "PM2.5 (μg/m³)",
+      "PM10 (μg/m³)",
+      "CO (ppm)",
+      "VOC (ppm)",
+      "Suhu (°C)",
+      "Sumber",
+    ];
+    const body = rows.map((r) => {
+      const d = new Date(r.timestamp);
+      return [
+        r.timestamp,
+        d.toLocaleDateString("id-ID"),
+        d.toLocaleTimeString("id-ID"),
+        r.pm25.toFixed(2),
+        r.pm10.toFixed(2),
+        r.co.toFixed(2),
+        r.voc.toFixed(2),
+        r.suhu.toFixed(2),
+        isFirebaseConnected ? "Firebase" : "Simulasi",
+      ];
+    });
+
+    const csv = [header, ...body].map((row) => row.join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `airguard-realtime-${new Date().toISOString().slice(0, 19).replace(/:/g, "-")}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    csvBufferRef.current = [];
+    setRecordedCount(0);
+  }, [isFirebaseConnected]);
+
+  // Export snapshot (historical / non-live)
+  const exportSnapshot = useCallback(async () => {
+    const daysMap = { "1h": 0, "3d": 3, "7d": 7 };
+    let rows: DataRow[] = [];
+
+    if (timeRange === "1h") {
+      rows = [...chartData];
+    } else {
+      try {
+        const fb = await getHistoricalData(daysMap[timeRange]);
+        rows =
+          fb.length > 0
+            ? fb.map((d) => ({
+                timestamp: d.timestamp.getTime(),
+                pm25: d.pm25,
+                pm10: d.pm10,
+                co: d.co,
+                voc: d.voc,
+                suhu: d.suhu,
+              }))
+            : generateHistoricalData(daysMap[timeRange]).map((d) => ({
+                timestamp: d.timestamp.getTime(),
+                pm25: d.pm25,
+                pm10: d.pm10,
+                co: d.co,
+                voc: d.voc,
+                suhu: d.suhu,
+              }));
+      } catch {
+        rows = generateHistoricalData(daysMap[timeRange]).map((d) => ({
+          timestamp: d.timestamp.getTime(),
+          pm25: d.pm25,
+          pm10: d.pm10,
+          co: d.co,
+          voc: d.voc,
+          suhu: d.suhu,
+        }));
       }
-
-      // 1. Deduplikasi data berdasarkan timestamp persis untuk menghindari input berulang
-      const uniqueDataMap = new Map();
-      exportData.forEach((item) => {
-        uniqueDataMap.set(item.timestamp, item);
-      });
-      exportData = Array.from(uniqueDataMap.values());
-
-      // 2. Sort data by timestamp ascending
-      exportData.sort((a, b) => a.timestamp - b.timestamp);
-
-      // Generate CSV content
-      const csvContent = [
-        ["Timestamp", "PM2.5", "PM10", "CO", "VOC", "Suhu", "Data Source"],
-        ...exportData.map((row) => [
-          new Date(row.timestamp).toISOString(),
-          (row.pm25 || 0).toFixed(2),
-          (row.pm10 || 0).toFixed(2),
-          (row.co || 0).toFixed(2),
-          (row.voc || 0).toFixed(2),
-          (row.suhu || 0).toFixed(2),
-          isFirebaseConnected ? "Firebase" : "Simulated",
-        ]),
-      ]
-        .map((row) => row.join(","))
-        .join("\n");
-
-      const blob = new Blob([csvContent], { type: "text/csv" });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `airguard-${timeRange}-data-${
-        new Date().toISOString().split("T")[0]
-      }.csv`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
-    } finally {
-      setIsExporting(false);
     }
-  };
+
+    rows.sort((a, b) => a.timestamp - b.timestamp);
+
+    const header = [
+      "Timestamp",
+      "Tanggal",
+      "Waktu",
+      "PM2.5 (μg/m³)",
+      "PM10 (μg/m³)",
+      "CO (ppm)",
+      "VOC (ppm)",
+      "Suhu (°C)",
+    ];
+    const body = rows.map((r) => {
+      const d = new Date(r.timestamp);
+      return [
+        r.timestamp,
+        d.toLocaleDateString("id-ID"),
+        d.toLocaleTimeString("id-ID"),
+        r.pm25.toFixed(2),
+        r.pm10.toFixed(2),
+        r.co.toFixed(2),
+        r.voc.toFixed(2),
+        r.suhu.toFixed(2),
+      ];
+    });
+
+    const csv = [header, ...body].map((row) => row.join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `airguard-${timeRange}-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [timeRange, chartData]);
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
 
   const config = SENSOR_CONFIG[selectedSensor];
 
-  const formatXAxis = (timestamp: number) => {
-    const date = new Date(timestamp);
-    if (timeRange === "1h") {
-      return date.toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-      });
-    }
-    return date.toLocaleDateString([], { weekday: "short", day: "numeric" });
+  const formatXAxis = (ts: number) => {
+    const d = new Date(ts);
+    return timeRange === "1h"
+      ? d.toLocaleTimeString("id-ID", {
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+        })
+      : d.toLocaleDateString("id-ID", { weekday: "short", day: "numeric" });
   };
 
-  return (
-    <Card className="p-6 md:p-8 bg-card/60 backdrop-blur-md border border-border/50 shadow-lg col-span-full rounded-3xl">
-      {/* --- HEADER SECTION --- */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-8 gap-4">
-        <div>
-          <div className="flex items-center gap-3 mb-1">
-            <Activity className="w-5 h-5 text-primary" />
-            <h3 className="font-bold text-foreground text-xl tracking-tight">
-              Real-Time Monitoring
-            </h3>
+  const isLive = timeRange === "1h";
 
-            {/* LIVE INDICATOR */}
-            {timeRange === "1h" && (
-              <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full border ${
-                isFirebaseConnected 
-                  ? "bg-green-500/10 border-green-500/20" 
-                  : "bg-red-500/10 border-red-500/20"
-              }`}>
-                <span className="relative flex h-2 w-2">
-                  <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
-                    isFirebaseConnected ? "bg-green-500" : "bg-red-500"
-                  }`}></span>
-                  <span className={`relative inline-flex rounded-full h-2 w-2 ${
-                    isFirebaseConnected ? "bg-green-500" : "bg-red-500"
-                  }`}></span>
+  // ── Render ────────────────────────────────────────────────────────────────
+
+  return (
+    <Card className="p-5 md:p-6 bg-card border border-border/60 shadow-sm">
+      {/* ── Header ── */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-5 gap-3">
+        <div className="flex items-center gap-3">
+          <Activity className="w-5 h-5 text-primary shrink-0" />
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="font-bold text-foreground text-base">
+                Real-Time Monitoring
+              </h3>
+
+              {/* Live / Simulated pill */}
+              {isLive && (
+                <span
+                  className={cn(
+                    "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[10px] font-bold tracking-widest",
+                    isFirebaseConnected
+                      ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-700 dark:text-emerald-300"
+                      : "bg-amber-500/10 border-amber-500/20 text-amber-700 dark:text-amber-300",
+                  )}
+                >
+                  <span className="relative flex h-1.5 w-1.5">
+                    <span
+                      className={cn(
+                        "animate-ping absolute inline-flex h-full w-full rounded-full opacity-75",
+                        isFirebaseConnected ? "bg-emerald-500" : "bg-amber-500",
+                      )}
+                    />
+                    <span
+                      className={cn(
+                        "relative inline-flex rounded-full h-1.5 w-1.5",
+                        isFirebaseConnected ? "bg-emerald-500" : "bg-amber-500",
+                      )}
+                    />
+                  </span>
+                  {isFirebaseConnected ? "LIVE" : "SIMULASI"}
                 </span>
-                <span className={`text-[10px] font-bold tracking-widest ${
-                  isFirebaseConnected ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"
-                }`}>
-                  {isFirebaseConnected ? "LIVE" : "SIMULATED"}
+              )}
+
+              {/* Recording indicator */}
+              {isRecording && (
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-red-500/10 border border-red-500/20 text-[10px] font-bold text-red-700 dark:text-red-300 animate-pulse">
+                  <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
+                  REC · {recordedCount} baris
                 </span>
-              </div>
-            )}
-          </div>
-          <p className="text-sm text-muted-foreground">
-            Grafik pergerakan sensor{" "}
-            <span className="font-semibold text-foreground">
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground mt-0.5">
               {config.description}
-            </span>
-          </p>
+            </p>
+          </div>
         </div>
-        <Button
-          onClick={handleExportData}
-          disabled={isExporting}
-          variant="outline"
-          size="sm"
-          className="text-xs font-semibold border-primary/20 hover:bg-primary/5 hover:text-primary">
-          <Download className="w-3 h-3 mr-2" />
-          {isExporting ? "Exporting..." : "Export CSV"}
-        </Button>
+
+        {/* Export controls */}
+        <div className="flex items-center gap-2 shrink-0">
+          {isLive ? (
+            // Live mode: record & export
+            isRecording ? (
+              <Button
+                onClick={stopAndExport}
+                size="sm"
+                className="text-xs font-semibold bg-red-500 hover:bg-red-600 text-white gap-1.5"
+              >
+                <Square className="w-3 h-3 fill-current" />
+                Stop & Export CSV
+              </Button>
+            ) : (
+              <Button
+                onClick={startRecording}
+                size="sm"
+                variant="outline"
+                className="text-xs font-semibold border-red-400/40 text-red-600 dark:text-red-400 hover:bg-red-500/10 gap-1.5"
+              >
+                <Circle className="w-3 h-3 fill-current" />
+                Rekam CSV
+              </Button>
+            )
+          ) : (
+            // Historical mode: snapshot export
+            <Button
+              onClick={exportSnapshot}
+              size="sm"
+              variant="outline"
+              className="text-xs font-semibold border-border hover:bg-muted gap-1.5 text-foreground"
+            >
+              <Download className="w-3 h-3" />
+              Export CSV
+            </Button>
+          )}
+        </div>
       </div>
 
-      {/* --- CONTROLS SECTION --- */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-        {/* Sensor Selector */}
-        <div>
-          <p className="text-[10px] font-bold text-muted-foreground mb-3 uppercase tracking-wider">
+      {/* ── Controls ── */}
+      <div className="flex flex-col sm:flex-row gap-4 mb-5">
+        {/* Sensor selector */}
+        <div className="flex-1">
+          <p className="text-[10px] font-bold text-muted-foreground mb-2 uppercase tracking-wider">
             Parameter Sensor
           </p>
-          <div className="flex gap-2 flex-wrap">
-            {(Object.keys(SENSOR_CONFIG) as SensorType[]).map((sensor) => (
-              <Button
-                key={sensor}
-                variant={selectedSensor === sensor ? "default" : "secondary"}
-                size="sm"
-                onClick={() => setSelectedSensor(sensor)}
-                className={`text-xs font-semibold transition-all duration-300 ${
-                  selectedSensor === sensor
-                    ? "shadow-md scale-105"
-                    : "opacity-70 hover:opacity-100"
-                }`}
+          <div className="flex gap-1.5 flex-wrap">
+            {(Object.keys(SENSOR_CONFIG) as SensorType[]).map((s) => (
+              <button
+                key={s}
+                onClick={() => setSelectedSensor(s)}
+                className={cn(
+                  "px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all duration-200",
+                  selectedSensor === s
+                    ? "text-white border-transparent shadow-sm scale-105"
+                    : "bg-muted/50 border-border text-muted-foreground hover:text-foreground hover:bg-muted",
+                )}
                 style={
-                  selectedSensor === sensor
+                  selectedSensor === s
                     ? {
-                        backgroundColor: SENSOR_CONFIG[sensor].color,
-                        borderColor: SENSOR_CONFIG[sensor].color,
+                        backgroundColor: SENSOR_CONFIG[s].color,
+                        borderColor: SENSOR_CONFIG[s].color,
                       }
                     : {}
-                }>
-                {SENSOR_CONFIG[sensor].label}
-              </Button>
+                }
+              >
+                {SENSOR_CONFIG[s].label}
+              </button>
             ))}
           </div>
         </div>
 
-        {/* Time Range Selector */}
-        <div className="lg:text-right">
-          <p className="text-[10px] font-bold text-muted-foreground mb-3 uppercase tracking-wider flex items-center gap-1 lg:justify-end">
+        {/* Time range selector */}
+        <div className="sm:text-right">
+          <p className="text-[10px] font-bold text-muted-foreground mb-2 uppercase tracking-wider flex items-center gap-1 sm:justify-end">
             <Calendar className="w-3 h-3" /> Rentang Waktu
           </p>
-          <div className="flex gap-2 flex-wrap lg:justify-end">
-            {(["1h", "3d", "7d"] as const).map((range) => (
-              <Button
-                key={range}
-                variant={timeRange === range ? "outline" : "ghost"}
-                size="sm"
-                onClick={() => setTimeRange(range)}
-                className={`text-xs font-semibold border ${
-                  timeRange === range
-                    ? "border-primary/50 bg-primary/5 text-primary"
-                    : "border-transparent hover:bg-secondary"
-                }`}>
-                {range === "1h"
-                  ? "LIVE (1 Jam)"
-                  : range === "3d"
-                  ? "3 Hari"
-                  : "7 Hari"}
-              </Button>
+          <div className="flex gap-1.5 flex-wrap sm:justify-end">
+            {(["1h", "3d", "7d"] as const).map((r) => (
+              <button
+                key={r}
+                onClick={() => setTimeRange(r)}
+                className={cn(
+                  "px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all duration-200",
+                  timeRange === r
+                    ? "border-primary/50 bg-primary/10 text-primary dark:text-primary"
+                    : "bg-muted/50 border-border text-muted-foreground hover:text-foreground hover:bg-muted",
+                )}
+              >
+                {r === "1h" ? "Live (1 Jam)" : r === "3d" ? "3 Hari" : "7 Hari"}
+              </button>
             ))}
           </div>
         </div>
       </div>
 
-      {/* --- CHART AREA --- */}
-      <div className="h-[350px] w-full mt-4">
+      {/* ── Chart ── */}
+      <div className="h-[300px] sm:h-[350px] w-full">
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart
-            data={data}
-            margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+            data={chartData}
+            margin={{ top: 8, right: 8, left: -20, bottom: 0 }}
+          >
             <defs>
               <linearGradient
-                id={`colorGradient-${selectedSensor}`}
+                id={`grad-${selectedSensor}`}
                 x1="0"
                 y1="0"
                 x2="0"
-                y2="1">
-                <stop offset="5%" stopColor={config.color} stopOpacity={0.3} />
+                y2="1"
+              >
+                <stop offset="5%" stopColor={config.color} stopOpacity={0.25} />
                 <stop offset="95%" stopColor={config.color} stopOpacity={0} />
               </linearGradient>
             </defs>
 
             <CartesianGrid
               strokeDasharray="3 3"
-              stroke="oklch(var(--border))"
+              stroke="currentColor"
+              className="text-border/40"
               vertical={false}
-              opacity={0.4}
             />
 
             <XAxis
               dataKey="timestamp"
               tickFormatter={formatXAxis}
-              stroke="oklch(var(--muted-foreground))"
-              style={{ fontSize: "11px", fontFamily: "var(--font-sans)" }}
+              tick={{
+                fontSize: 11,
+                fill: "currentColor",
+                className: "text-muted-foreground",
+              }}
               tickLine={false}
               axisLine={false}
-              dy={10}
-              // Agar X-Axis tidak berantakan saat live
+              dy={8}
               interval="preserveStartEnd"
-              minTickGap={30}
+              minTickGap={40}
             />
 
             <YAxis
-              stroke="oklch(var(--muted-foreground))"
-              style={{ fontSize: "11px", fontFamily: "var(--font-sans)" }}
+              tick={{
+                fontSize: 11,
+                fill: "currentColor",
+                className: "text-muted-foreground",
+              }}
               tickLine={false}
               axisLine={false}
-              dx={-10}
-              domain={[config.min, "auto"]} // Agar sumbu Y dinamis tapi tidak terlalu loncat
+              dx={-8}
+              domain={[config.min, "auto"]}
             />
 
             <Tooltip
               contentStyle={{
-                backgroundColor: "oklch(var(--card))",
-                border: "1px solid oklch(var(--border))",
-                borderRadius: "12px",
-                boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
-                color: "oklch(var(--foreground))",
+                backgroundColor: "hsl(var(--card))",
+                border: "1px solid hsl(var(--border))",
+                borderRadius: "10px",
+                boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
+                color: "hsl(var(--foreground))",
                 fontSize: "12px",
+              }}
+              labelStyle={{
+                color: "hsl(var(--muted-foreground))",
+                marginBottom: 4,
               }}
               itemStyle={{ color: config.color, fontWeight: 600 }}
               labelFormatter={(ts) =>
@@ -461,8 +579,8 @@ export function ChartSection() {
                   second: "2-digit",
                 })
               }
-              formatter={(value: any) => [
-                `${value.toFixed(1)} ${config.unit}`,
+              formatter={(v: number) => [
+                `${v.toFixed(2)} ${config.unit}`,
                 config.label,
               ]}
             />
@@ -471,16 +589,32 @@ export function ChartSection() {
               type="monotone"
               dataKey={selectedSensor}
               stroke={config.color}
-              strokeWidth={3}
+              strokeWidth={2.5}
               fillOpacity={1}
-              fill={`url(#colorGradient-${selectedSensor})`}
-              // Penting untuk animasi smooth saat data baru masuk:
-              isAnimationActive={true}
-              animationDuration={1500}
+              fill={`url(#grad-${selectedSensor})`}
+              isAnimationActive={false}
+              dot={false}
+              activeDot={{ r: 4, strokeWidth: 0 }}
             />
           </AreaChart>
         </ResponsiveContainer>
       </div>
+
+      {/* ── Recording hint ── */}
+      {isLive && !isRecording && (
+        <p className="text-[11px] text-muted-foreground text-center mt-3">
+          Klik <span className="font-semibold text-foreground">Rekam CSV</span>{" "}
+          untuk mulai merekam data real-time dari Firebase. Data tersimpan
+          setiap update (~3 detik).
+        </p>
+      )}
+      {isRecording && (
+        <p className="text-[11px] text-red-600 dark:text-red-400 text-center mt-3 font-medium">
+          Sedang merekam… {recordedCount} baris tersimpan. Klik{" "}
+          <span className="font-semibold">Stop & Export CSV</span> untuk
+          mengunduh.
+        </p>
+      )}
     </Card>
   );
 }

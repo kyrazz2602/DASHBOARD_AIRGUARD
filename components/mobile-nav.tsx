@@ -3,56 +3,65 @@
 import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/context/auth-context";
 import { Home, LayoutDashboard, LogOut } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export function MobileNav() {
   const router = useRouter();
   const pathname = usePathname();
   const { user, logout } = useAuth();
 
-  const handleLogout = () => {
-    logout();
-    router.push("/home");
-  };
-
-  const navigateTo = (path: string) => {
-    router.push(path);
-  };
-
   if (!user) return null;
 
+  const items = [
+    { label: "Home", icon: Home, path: "/home" },
+    { label: "Dashboard", icon: LayoutDashboard, path: "/dashboard" },
+  ];
+
   return (
-    <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-card/95 backdrop-blur-md border-t border-border">
-      <div className="flex items-center justify-around px-2 py-1 safe-area-pb">
+    <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-card/95 backdrop-blur-xl border-t border-border/60 safe-area-pb">
+      <div className="flex items-center justify-around px-2 py-1">
+        {items.map(({ label, icon: Icon, path }) => {
+          const active = pathname === path;
+          return (
+            <button
+              key={path}
+              onClick={() => router.push(path)}
+              className={cn(
+                "flex flex-col items-center gap-1 py-2.5 px-6 rounded-xl transition-colors",
+                active
+                  ? "text-primary"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              <Icon
+                className={cn(
+                  "w-5 h-5 transition-transform",
+                  active && "scale-110",
+                )}
+              />
+              <span
+                className={cn(
+                  "text-[10px] font-semibold",
+                  active && "font-bold",
+                )}
+              >
+                {label}
+              </span>
+            </button>
+          );
+        })}
+
         <button
-          onClick={() => navigateTo("/home")}
-          className={`flex flex-col items-center gap-1 py-2 px-5 rounded-xl transition-colors ${
-            pathname === "/home"
-              ? "text-primary"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          <Home className="w-5 h-5" />
-          <span className="text-[10px] font-medium">Home</span>
-        </button>
-        <button
-          onClick={() => navigateTo("/dashboard")}
-          className={`flex flex-col items-center gap-1 py-2 px-5 rounded-xl transition-colors ${
-            pathname === "/dashboard"
-              ? "text-primary"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          <LayoutDashboard className="w-5 h-5" />
-          <span className="text-[10px] font-medium">Dashboard</span>
-        </button>
-        <button
-          onClick={handleLogout}
-          className="flex flex-col items-center gap-1 py-2 px-5 rounded-xl text-muted-foreground hover:text-destructive transition-colors"
+          onClick={() => {
+            logout();
+            router.push("/home");
+          }}
+          className="flex flex-col items-center gap-1 py-2.5 px-6 rounded-xl text-muted-foreground hover:text-destructive transition-colors"
         >
           <LogOut className="w-5 h-5" />
-          <span className="text-[10px] font-medium">Logout</span>
+          <span className="text-[10px] font-semibold">Keluar</span>
         </button>
       </div>
-    </div>
+    </nav>
   );
 }
