@@ -6,29 +6,29 @@ import {
   AlertCircle,
   CheckCircle2,
   Wrench,
-  Activity,
   Thermometer,
   Battery,
   RefreshCcw,
   Loader2,
   WifiOff,
   Brain,
-  Info,
+  Sparkles,
+  BatteryLow,
+  BatteryMedium,
+  BatteryFull,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import type { FilterStatus, FilterProbabilities } from "@/lib/sensor-data";
 
 interface MaintenanceWidgetProps {
-  filterHealth?: number; // 0 - 100
+  filterHealth?: number;
   daysRemaining?: number;
   onResetFilter?: () => void;
   isLoading?: boolean;
-  currentPm25?: number; // Untuk menghitung beban kerja
-  temperature?: number; // Celcius
-  batteryLevel?: number; // 0 - 100
-
-  // ML props
+  currentPm25?: number;
+  temperature?: number;
+  batteryLevel?: number;
   mlStatus?: FilterStatus | null;
   probabilities?: FilterProbabilities | null;
   recommendation?: string | null;
@@ -52,332 +52,357 @@ export function MaintenanceWidget({
   isMLAvailable = false,
   isPredicting = false,
 }: MaintenanceWidgetProps) {
-  // 1. Status Config (Memoized)
-  const status = useMemo(() => {
+  // Filter health status config
+  const filterStatus = useMemo(() => {
     if (filterHealth > 70) {
       return {
-        theme: "emerald",
-        icon: (
-          <CheckCircle2 className="w-5 h-5 text-emerald-500 dark:text-emerald-400" />
-        ),
-        title: "System Healthy",
-        message: "Filter is optimal",
+        icon: <CheckCircle2 className="w-4 h-4" />,
+        label: "Filter Optimal",
+        sublabel: "Berfungsi dengan baik",
+        accent: "emerald",
         styles: {
-          bg: "bg-emerald-50/50 dark:bg-emerald-950/30 border-emerald-100 dark:border-emerald-800/50",
-          text: "text-emerald-700 dark:text-emerald-300",
-          bar: "bg-emerald-500 dark:bg-emerald-600",
+          icon: "text-emerald-500 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-900/40",
+          text: "text-emerald-600 dark:text-emerald-400",
+          bar: "bg-gradient-to-r from-emerald-400 to-emerald-500",
+          badge:
+            "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300",
         },
       };
     } else if (filterHealth > 30) {
       return {
-        theme: "orange",
-        icon: (
-          <AlertCircle className="w-5 h-5 text-orange-500 dark:text-orange-400" />
-        ),
-        title: "Maintenance Soon",
-        message: "Efficiency dropping",
+        icon: <AlertCircle className="w-4 h-4" />,
+        label: "Perlu Perhatian",
+        sublabel: "Efisiensi menurun",
+        accent: "orange",
         styles: {
-          bg: "bg-orange-50/50 dark:bg-orange-950/30 border-orange-100 dark:border-orange-800/50",
-          text: "text-orange-700 dark:text-orange-300",
-          bar: "bg-orange-500 dark:bg-orange-600",
+          icon: "text-orange-500 dark:text-orange-400 bg-orange-100 dark:bg-orange-900/40",
+          text: "text-orange-600 dark:text-orange-400",
+          bar: "bg-gradient-to-r from-orange-400 to-orange-500",
+          badge:
+            "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300",
         },
       };
     } else {
       return {
-        theme: "red",
-        icon: <Wrench className="w-5 h-5 text-red-500 dark:text-red-400" />,
-        title: "Action Required",
-        message: "Replace filter now",
+        icon: <Wrench className="w-4 h-4" />,
+        label: "Ganti Segera",
+        sublabel: "Filter sudah tidak efektif",
+        accent: "red",
         styles: {
-          bg: "bg-red-50/50 dark:bg-red-950/30 border-red-100 dark:border-red-800/50",
-          text: "text-red-700 dark:text-red-300",
-          bar: "bg-red-500 dark:bg-red-600",
+          icon: "text-red-500 dark:text-red-400 bg-red-100 dark:bg-red-900/40",
+          text: "text-red-600 dark:text-red-400",
+          bar: "bg-gradient-to-r from-red-400 to-red-500",
+          badge: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300",
         },
       };
     }
   }, [filterHealth]);
 
-  // 3. Load Status (Memoized)
-  const loadStatus = useMemo(() => {
-    if (currentPm25 > 50)
+  // Battery icon & color
+  const batteryConfig = useMemo(() => {
+    if (batteryLevel > 60)
       return {
-        text: "Danger",
-        color: "text-red-600 bg-red-100 dark:text-red-400 dark:bg-red-900/30",
-      };
-    if (currentPm25 > 20)
-      return {
-        text: "Moderate",
-        color:
-          "text-orange-600 bg-orange-100 dark:text-orange-400 dark:bg-orange-900/30",
-      };
-    return {
-      text: "Normal",
-      color:
-        "text-emerald-600 bg-emerald-100 dark:text-emerald-400 dark:bg-emerald-900/30",
-    };
-  }, [currentPm25]);
-
-  // 4. Battery Status (Memoized)
-  const batteryStatus = useMemo(() => {
-    if (batteryLevel > 50)
-      return {
-        color: "text-emerald-600 dark:text-emerald-400",
-        bg: "bg-emerald-100 dark:bg-emerald-900/30",
+        icon: <BatteryFull className="w-4 h-4" />,
+        color: "text-emerald-500 dark:text-emerald-400",
+        bg: "bg-emerald-100 dark:bg-emerald-900/40",
       };
     if (batteryLevel > 20)
       return {
-        color: "text-orange-600 dark:text-orange-400",
-        bg: "bg-orange-100 dark:bg-orange-900/30",
+        icon: <BatteryMedium className="w-4 h-4" />,
+        color: "text-orange-500 dark:text-orange-400",
+        bg: "bg-orange-100 dark:bg-orange-900/40",
       };
     return {
-      color: "text-red-600 dark:text-red-400",
-      bg: "bg-red-100 dark:bg-red-900/30",
+      icon: <BatteryLow className="w-4 h-4" />,
+      color: "text-red-500 dark:text-red-400",
+      bg: "bg-red-100 dark:bg-red-900/40",
     };
   }, [batteryLevel]);
 
-  // ML Status Badge config
-  const mlStatusBadge = useMemo(() => {
+  // ML status config
+  const mlStatusConfig = useMemo(() => {
     if (!mlStatus) return null;
     switch (mlStatus) {
       case "Aman":
         return {
-          text: "ML: Aman",
-          color:
-            "text-emerald-600 bg-emerald-100 dark:text-emerald-400 dark:bg-emerald-900/30",
+          label: "Aman",
+          styles:
+            "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300",
+          bar: "bg-emerald-500",
+          text: "text-emerald-600 dark:text-emerald-400",
         };
       case "Perhatian":
         return {
-          text: "ML: Perhatian",
-          color:
-            "text-orange-600 bg-orange-100 dark:text-orange-400 dark:bg-orange-900/30",
+          label: "Perhatian",
+          styles:
+            "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300",
+          bar: "bg-orange-500",
+          text: "text-orange-600 dark:text-orange-400",
         };
       case "Ganti Filter":
         return {
-          text: "ML: Ganti Filter",
-          color: "text-red-600 bg-red-100 dark:text-red-400 dark:bg-red-900/30",
+          label: "Ganti Filter",
+          styles:
+            "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300",
+          bar: "bg-red-500",
+          text: "text-red-600 dark:text-red-400",
         };
     }
   }, [mlStatus]);
 
-  // Probability bar configs
+  // Probability bars
   const probabilityBars = useMemo(() => {
     if (!probabilities) return null;
     return [
       {
         label: "Aman",
         value: probabilities.aman,
-        barColor: "bg-emerald-500 dark:bg-emerald-600",
-        textColor: "text-emerald-700 dark:text-emerald-300",
+        bar: "bg-emerald-500 dark:bg-emerald-400",
+        text: "text-emerald-600 dark:text-emerald-400",
       },
       {
         label: "Perhatian",
         value: probabilities.perhatian,
-        barColor: "bg-orange-500 dark:bg-orange-600",
-        textColor: "text-orange-700 dark:text-orange-300",
+        bar: "bg-orange-500 dark:bg-orange-400",
+        text: "text-orange-600 dark:text-orange-400",
       },
       {
         label: "Ganti Filter",
         value: probabilities.gantiFilter,
-        barColor: "bg-red-500 dark:bg-red-600",
-        textColor: "text-red-700 dark:text-red-300",
+        bar: "bg-red-500 dark:bg-red-400",
+        text: "text-red-600 dark:text-red-400",
       },
     ];
   }, [probabilities]);
 
-  const showMLSection = isMLAvailable;
-  const showProbabilities =
-    showMLSection && probabilities !== null && probabilities !== undefined;
-  const showRecommendation =
-    showMLSection && recommendation !== null && recommendation !== undefined;
-
   return (
-    <Card
-      className={cn(
-        "p-5 border shadow-sm transition-all duration-300 hover:shadow-md",
-        status.styles.bg,
-      )}
-    >
-      {/* --- Bagian Atas: Filter Status --- */}
-      <div className="flex justify-between items-start mb-4">
-        <div className="flex gap-3">
-          <div className="p-2 bg-white dark:bg-card rounded-full shadow-sm ring-1 ring-inset ring-black/5 dark:ring-white/10">
-            {status.icon}
-          </div>
-          <div>
-            <h3 className={cn("font-bold text-sm", status.styles.text)}>
-              {status.title}
-            </h3>
-            <p className="text-xs text-muted-foreground dark:text-muted-foreground/80">
-              {status.message}
-            </p>
-          </div>
-        </div>
-
-        {/* Badges: Load + ML status / ML Offline */}
-        <div className="flex items-center gap-1.5 flex-wrap justify-end">
-          {/* Load Badge */}
-          <div
-            className={cn(
-              "px-2 py-1 rounded-full text-[10px] font-bold flex items-center gap-1 border border-black/5 dark:border-white/10",
-              loadStatus.color,
-            )}
-          >
-            <Activity className="w-3 h-3" />
-            {loadStatus.text}
+    <Card className="overflow-hidden border border-border/60 shadow-sm bg-card">
+      {/* ── Header: status + badge ── */}
+      <div className="px-5 pt-5 pb-4">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className={cn("p-2 rounded-xl", filterStatus.styles.icon)}>
+              {filterStatus.icon}
+            </div>
+            <div>
+              <p
+                className={cn(
+                  "text-sm font-semibold leading-tight",
+                  filterStatus.styles.text,
+                )}
+              >
+                {filterStatus.label}
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {filterStatus.sublabel}
+              </p>
+            </div>
           </div>
 
-          {/* ML Status Badge or ML Offline Badge */}
-          {isMLAvailable &&
-          mlStatus !== null &&
-          mlStatus !== undefined &&
-          mlStatusBadge ? (
-            <div
+          {/* ML badge */}
+          {isMLAvailable && mlStatus && mlStatusConfig ? (
+            <span
               className={cn(
-                "px-2 py-1 rounded-full text-[10px] font-bold flex items-center gap-1 border border-black/5 dark:border-white/10",
-                mlStatusBadge.color,
+                "inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold shrink-0",
+                mlStatusConfig.styles,
               )}
             >
               <Brain className="w-3 h-3" />
-              {mlStatusBadge.text}
-            </div>
+              {mlStatusConfig.label}
+            </span>
           ) : !isMLAvailable ? (
-            <div className="px-2 py-1 rounded-full text-[10px] font-bold flex items-center gap-1 border border-black/5 dark:border-white/10 text-gray-500 bg-gray-100 dark:text-gray-400 dark:bg-gray-800/50">
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-muted text-muted-foreground shrink-0">
               <WifiOff className="w-3 h-3" />
               ML Offline
-            </div>
+            </span>
           ) : null}
         </div>
       </div>
 
-      <div className="space-y-1.5 mb-5">
-        <div className="flex justify-between text-xs font-medium">
-          <span className="text-muted-foreground dark:text-muted-foreground/80">
+      {/* ── Filter Integrity bar ── */}
+      <div className="px-5 pb-4 space-y-2">
+        <div className="flex justify-between items-center">
+          <span className="text-xs font-medium text-muted-foreground">
             Filter Integrity
           </span>
-          <span className={status.styles.text}>{filterHealth}%</span>
+          <span
+            className={cn(
+              "text-sm font-bold tabular-nums",
+              filterStatus.styles.text,
+            )}
+          >
+            {filterHealth}%
+          </span>
         </div>
 
-        <div className="h-2.5 w-full bg-black/5 dark:bg-white/10 rounded-full overflow-hidden">
+        {/* Progress bar */}
+        <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
           <div
             className={cn(
-              "h-full transition-all duration-700 ease-out rounded-full",
-              status.styles.bar,
+              "h-full rounded-full transition-all duration-700 ease-out",
+              filterStatus.styles.bar,
             )}
             style={{ width: `${filterHealth}%` }}
           />
         </div>
 
-        <div className="flex justify-between items-center pt-1">
-          <p className="text-[10px] text-muted-foreground dark:text-muted-foreground/70 font-medium pt-1">
-            Est. lifespan: {daysRemaining} days
-          </p>
+        <div className="flex justify-between items-center pt-0.5">
+          <span className="text-[11px] text-muted-foreground">
+            Estimasi sisa:{" "}
+            <span className="font-semibold">{daysRemaining} hari</span>
+          </span>
           {onResetFilter && (
             <Button
               variant="outline"
               size="sm"
               onClick={onResetFilter}
               disabled={isLoading}
-              className="h-6 text-[10px] px-2 gap-1"
+              className="h-7 text-xs px-3 gap-1.5 rounded-lg"
             >
               {isLoading ? (
                 <Loader2 className="w-3 h-3 animate-spin" />
               ) : (
                 <RefreshCcw className="w-3 h-3" />
               )}
-              Reset Filter
+              Reset
             </Button>
           )}
         </div>
       </div>
 
-      {/* --- ML Section: Probability Bars / Skeleton / Recommendation --- */}
-      {showMLSection && (
-        <div className="border-t border-black/5 dark:border-white/10 pt-4 mb-4 space-y-3">
-          {/* Section Title */}
+      {/* ── Divider ── */}
+      <div className="h-px bg-border/50 mx-5" />
+
+      {/* ── ML Prediction section ── */}
+      <div className="px-5 py-4 space-y-3">
+        <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5">
-            <Brain className="w-3.5 h-3.5 text-muted-foreground dark:text-muted-foreground/80" />
-            <span className="text-xs font-semibold text-muted-foreground dark:text-muted-foreground/80">
+            <Brain className="w-3.5 h-3.5 text-muted-foreground" />
+            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
               Prediksi ML
             </span>
           </div>
-
-          {/* Loading Skeleton */}
-          {isPredicting ? (
-            <div className="space-y-2 animate-pulse">
-              <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded-full w-full" />
-              <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded-full w-full" />
-              <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded-full w-full" />
-            </div>
-          ) : showProbabilities && probabilityBars ? (
-            /* Probability Bars */
-            <div className="space-y-2">
-              {probabilityBars.map((bar) => (
-                <div key={bar.label} className="space-y-0.5">
-                  <div className="flex justify-between items-center text-[10px] font-medium">
-                    <span className={bar.textColor}>{bar.label}</span>
-                    <span className={bar.textColor}>
-                      {(bar.value * 100).toFixed(0)}%
-                    </span>
-                  </div>
-                  <div className="h-1.5 w-full bg-black/5 dark:bg-white/10 rounded-full overflow-hidden">
-                    <div
-                      className={cn(
-                        "h-full transition-all duration-700 ease-out rounded-full",
-                        bar.barColor,
-                      )}
-                      style={{ width: `${(bar.value * 100).toFixed(0)}%` }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : null}
-
-          {/* Recommendation */}
-          {!isPredicting && showRecommendation && (
-            <div className="flex gap-2 bg-white/50 dark:bg-card/50 border border-black/5 dark:border-white/10 rounded-lg p-2.5">
-              <Info className="w-3.5 h-3.5 text-muted-foreground dark:text-muted-foreground/80 mt-0.5 shrink-0" />
-              <p className="text-[10px] text-muted-foreground dark:text-muted-foreground/80 leading-relaxed">
-                {recommendation}
-              </p>
-            </div>
+          {isMLAvailable && confidence !== null && (
+            <span className="text-[11px] text-muted-foreground">
+              Akurasi{" "}
+              <span className="font-semibold text-foreground">
+                {(confidence * 100).toFixed(0)}%
+              </span>
+            </span>
           )}
         </div>
-      )}
 
-      {/* --- Bagian Bawah: Sensor Stats --- */}
-      <div className="grid grid-cols-2 gap-3 pt-4 border-t border-black/5 dark:border-white/10">
-        {/* Suhu */}
-        <div className="flex items-center gap-3 bg-white/50 dark:bg-card/50 p-2 rounded-lg border border-black/5 dark:border-white/10">
-          <div className="p-1.5 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-md">
+        {/* ML unavailable state */}
+        {!isMLAvailable && (
+          <div className="flex items-center gap-2.5 p-3 rounded-xl bg-muted/50 border border-border/50">
+            <WifiOff className="w-4 h-4 text-muted-foreground shrink-0" />
+            <div>
+              <p className="text-xs font-medium text-foreground">
+                ML Service Offline
+              </p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">
+                Menggunakan analisis berbasis aturan
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Loading skeleton */}
+        {isMLAvailable && isPredicting && (
+          <div className="space-y-2.5 animate-pulse">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="space-y-1">
+                <div className="flex justify-between">
+                  <div className="h-3 bg-muted rounded w-16" />
+                  <div className="h-3 bg-muted rounded w-8" />
+                </div>
+                <div className="h-1.5 bg-muted rounded-full w-full" />
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Probability bars */}
+        {isMLAvailable && !isPredicting && probabilityBars && (
+          <div className="space-y-2.5">
+            {probabilityBars.map((bar) => (
+              <div key={bar.label} className="space-y-1">
+                <div className="flex justify-between items-center">
+                  <span className={cn("text-xs font-medium", bar.text)}>
+                    {bar.label}
+                  </span>
+                  <span
+                    className={cn("text-xs font-bold tabular-nums", bar.text)}
+                  >
+                    {(bar.value * 100).toFixed(0)}%
+                  </span>
+                </div>
+                <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+                  <div
+                    className={cn(
+                      "h-full rounded-full transition-all duration-700 ease-out",
+                      bar.bar,
+                    )}
+                    style={{ width: `${(bar.value * 100).toFixed(0)}%` }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Recommendation */}
+        {isMLAvailable && !isPredicting && recommendation && (
+          <div className="flex gap-2.5 p-3 rounded-xl bg-muted/40 border border-border/50">
+            <Sparkles className="w-3.5 h-3.5 text-muted-foreground mt-0.5 shrink-0" />
+            <p className="text-[11px] text-muted-foreground leading-relaxed">
+              {recommendation}
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* ── Divider ── */}
+      <div className="h-px bg-border/50 mx-5" />
+
+      {/* ── Stats: Temp + Battery ── */}
+      <div className="px-5 py-4 grid grid-cols-2 gap-3">
+        {/* Temperature */}
+        <div className="flex items-center gap-3 p-3 rounded-xl bg-muted/40 border border-border/50">
+          <div className="p-1.5 rounded-lg bg-blue-100 dark:bg-blue-900/40 text-blue-500 dark:text-blue-400 shrink-0">
             <Thermometer className="w-4 h-4" />
           </div>
-          <div>
-            <p className="text-[10px] text-muted-foreground dark:text-muted-foreground/80 font-medium">
-              Temp
+          <div className="min-w-0">
+            <p className="text-[11px] text-muted-foreground font-medium">
+              Suhu
             </p>
-            <p className="text-sm font-bold text-slate-700 dark:text-slate-300">
+            <p className="text-sm font-bold text-foreground leading-tight">
               {temperature}°C
             </p>
           </div>
         </div>
 
-        {/* Baterai */}
-        <div className="flex items-center gap-3 bg-white/50 dark:bg-card/50 p-2 rounded-lg border border-black/5 dark:border-white/10">
+        {/* Battery */}
+        <div className="flex items-center gap-3 p-3 rounded-xl bg-muted/40 border border-border/50">
           <div
             className={cn(
-              "p-1.5 rounded-md transition-colors",
-              batteryStatus.bg,
-              batteryStatus.color,
+              "p-1.5 rounded-lg shrink-0",
+              batteryConfig.bg,
+              batteryConfig.color,
             )}
           >
-            <Battery className="w-4 h-4" />
+            {batteryConfig.icon}
           </div>
-          <div>
-            <p className="text-[10px] text-muted-foreground dark:text-muted-foreground/80 font-medium">
-              Battery
+          <div className="min-w-0">
+            <p className="text-[11px] text-muted-foreground font-medium">
+              Baterai
             </p>
-            <p className="text-sm font-bold text-slate-700 dark:text-slate-300">
+            <p
+              className={cn(
+                "text-sm font-bold leading-tight",
+                batteryConfig.color,
+              )}
+            >
               {batteryLevel}%
             </p>
           </div>
