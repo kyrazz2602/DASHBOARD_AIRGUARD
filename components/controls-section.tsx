@@ -163,7 +163,7 @@ export function ControlsSection({
                   {isFirebaseConnected ? (
                     <Badge
                       variant="outline"
-                      className="text-emerald-600 border-emerald-300/60 bg-emerald-50 dark:bg-emerald-950/30 text-[10px] gap-1 px-2 py-0.5"
+                      className="text-emerald-700 border-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-700/60 text-[10px] gap-1 px-2 py-0.5"
                     >
                       <Wifi className="w-2.5 h-2.5" />
                       Firebase
@@ -171,7 +171,7 @@ export function ControlsSection({
                   ) : (
                     <Badge
                       variant="outline"
-                      className="text-rose-500 border-rose-300/60 bg-rose-50 dark:bg-rose-950/30 text-[10px] gap-1 px-2 py-0.5"
+                      className="text-red-700 border-red-400 bg-red-50 dark:bg-rose-950/30 dark:text-rose-300 dark:border-rose-700/60 text-[10px] gap-1 px-2 py-0.5"
                     >
                       <WifiOff className="w-2.5 h-2.5" />
                       Offline

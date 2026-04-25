@@ -120,13 +120,23 @@ export function useMLFilterEstimation(): MLFilterEstimationResult {
 
   useEffect(() => {
     const timeoutId = setTimeout(async () => {
-      // Validate: skip if all primary pollutant values are zero
-      if (
+      // Validate: skip jika semua sensor utama bernilai 0 (data belum masuk)
+      // atau jika ada nilai yang tidak valid (NaN/Infinity)
+      const allZero =
         sensorData.pm25 === 0 &&
         sensorData.pm10 === 0 &&
         sensorData.co === 0 &&
-        sensorData.voc === 0
-      ) {
+        sensorData.voc === 0;
+
+      const hasInvalidValue = [
+        sensorData.pm25,
+        sensorData.pm10,
+        sensorData.co,
+        sensorData.voc,
+        sensorData.suhu,
+      ].some((v) => !isFinite(v) || isNaN(v));
+
+      if (allZero || hasInvalidValue) {
         return;
       }
 

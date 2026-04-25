@@ -52,20 +52,16 @@ export function MaintenanceWidget({
   isMLAvailable = false,
   isPredicting = false,
 }: MaintenanceWidgetProps) {
-  // Filter health status config
   const filterStatus = useMemo(() => {
     if (filterHealth > 70) {
       return {
         icon: <CheckCircle2 className="w-4 h-4" />,
         label: "Filter Optimal",
         sublabel: "Berfungsi dengan baik",
-        accent: "emerald",
         styles: {
-          icon: "text-emerald-500 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-900/40",
-          text: "text-emerald-600 dark:text-emerald-400",
-          bar: "bg-gradient-to-r from-emerald-400 to-emerald-500",
-          badge:
-            "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300",
+          icon: "text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-900/40",
+          text: "text-emerald-700 dark:text-emerald-300",
+          bar: "bg-gradient-to-r from-emerald-500 to-emerald-600",
         },
       };
     } else if (filterHealth > 30) {
@@ -73,13 +69,10 @@ export function MaintenanceWidget({
         icon: <AlertCircle className="w-4 h-4" />,
         label: "Perlu Perhatian",
         sublabel: "Efisiensi menurun",
-        accent: "orange",
         styles: {
-          icon: "text-orange-500 dark:text-orange-400 bg-orange-100 dark:bg-orange-900/40",
-          text: "text-orange-600 dark:text-orange-400",
-          bar: "bg-gradient-to-r from-orange-400 to-orange-500",
-          badge:
-            "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300",
+          icon: "text-orange-700 dark:text-orange-300 bg-orange-100 dark:bg-orange-900/40",
+          text: "text-orange-700 dark:text-orange-300",
+          bar: "bg-gradient-to-r from-orange-500 to-orange-600",
         },
       };
     } else {
@@ -87,39 +80,35 @@ export function MaintenanceWidget({
         icon: <Wrench className="w-4 h-4" />,
         label: "Ganti Segera",
         sublabel: "Filter sudah tidak efektif",
-        accent: "red",
         styles: {
-          icon: "text-red-500 dark:text-red-400 bg-red-100 dark:bg-red-900/40",
-          text: "text-red-600 dark:text-red-400",
-          bar: "bg-gradient-to-r from-red-400 to-red-500",
-          badge: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300",
+          icon: "text-red-700 dark:text-red-300 bg-red-100 dark:bg-red-900/40",
+          text: "text-red-700 dark:text-red-300",
+          bar: "bg-gradient-to-r from-red-500 to-red-600",
         },
       };
     }
   }, [filterHealth]);
 
-  // Battery icon & color
   const batteryConfig = useMemo(() => {
     if (batteryLevel > 60)
       return {
         icon: <BatteryFull className="w-4 h-4" />,
-        color: "text-emerald-500 dark:text-emerald-400",
+        color: "text-emerald-700 dark:text-emerald-300",
         bg: "bg-emerald-100 dark:bg-emerald-900/40",
       };
     if (batteryLevel > 20)
       return {
         icon: <BatteryMedium className="w-4 h-4" />,
-        color: "text-orange-500 dark:text-orange-400",
+        color: "text-orange-700 dark:text-orange-300",
         bg: "bg-orange-100 dark:bg-orange-900/40",
       };
     return {
       icon: <BatteryLow className="w-4 h-4" />,
-      color: "text-red-500 dark:text-red-400",
+      color: "text-red-700 dark:text-red-300",
       bg: "bg-red-100 dark:bg-red-900/40",
     };
   }, [batteryLevel]);
 
-  // ML status config
   const mlStatusConfig = useMemo(() => {
     if (!mlStatus) return null;
     switch (mlStatus) {
@@ -128,56 +117,52 @@ export function MaintenanceWidget({
           label: "Aman",
           styles:
             "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300",
-          bar: "bg-emerald-500",
-          text: "text-emerald-600 dark:text-emerald-400",
+          text: "text-emerald-700 dark:text-emerald-300",
         };
       case "Perhatian":
         return {
           label: "Perhatian",
           styles:
             "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300",
-          bar: "bg-orange-500",
-          text: "text-orange-600 dark:text-orange-400",
+          text: "text-orange-700 dark:text-orange-300",
         };
       case "Ganti Filter":
         return {
           label: "Ganti Filter",
           styles:
             "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300",
-          bar: "bg-red-500",
-          text: "text-red-600 dark:text-red-400",
+          text: "text-red-700 dark:text-red-300",
         };
     }
   }, [mlStatus]);
 
-  // Probability bars
   const probabilityBars = useMemo(() => {
     if (!probabilities) return null;
     return [
       {
         label: "Aman",
         value: probabilities.aman,
-        bar: "bg-emerald-500 dark:bg-emerald-400",
-        text: "text-emerald-600 dark:text-emerald-400",
+        bar: "bg-emerald-600 dark:bg-emerald-400",
+        text: "text-emerald-700 dark:text-emerald-300",
       },
       {
         label: "Perhatian",
         value: probabilities.perhatian,
-        bar: "bg-orange-500 dark:bg-orange-400",
-        text: "text-orange-600 dark:text-orange-400",
+        bar: "bg-orange-600 dark:bg-orange-400",
+        text: "text-orange-700 dark:text-orange-300",
       },
       {
         label: "Ganti Filter",
         value: probabilities.gantiFilter,
-        bar: "bg-red-500 dark:bg-red-400",
-        text: "text-red-600 dark:text-red-400",
+        bar: "bg-red-600 dark:bg-red-400",
+        text: "text-red-700 dark:text-red-300",
       },
     ];
   }, [probabilities]);
 
   return (
-    <Card className="overflow-hidden border border-border/60 shadow-sm bg-card">
-      {/* ── Header: status + badge ── */}
+    <Card className="overflow-hidden border border-border shadow-sm bg-card">
+      {/* ── Header ── */}
       <div className="px-5 pt-5 pb-4">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
@@ -219,7 +204,7 @@ export function MaintenanceWidget({
         </div>
       </div>
 
-      {/* ── Filter Integrity bar ── */}
+      {/* ── Filter Integrity ── */}
       <div className="px-5 pb-4 space-y-2">
         <div className="flex justify-between items-center">
           <span className="text-xs font-medium text-muted-foreground">
@@ -234,8 +219,6 @@ export function MaintenanceWidget({
             {filterHealth}%
           </span>
         </div>
-
-        {/* Progress bar */}
         <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
           <div
             className={cn(
@@ -245,11 +228,12 @@ export function MaintenanceWidget({
             style={{ width: `${filterHealth}%` }}
           />
         </div>
-
         <div className="flex justify-between items-center pt-0.5">
           <span className="text-[11px] text-muted-foreground">
             Estimasi sisa:{" "}
-            <span className="font-semibold">{daysRemaining} hari</span>
+            <span className="font-semibold text-foreground">
+              {daysRemaining} hari
+            </span>
           </span>
           {onResetFilter && (
             <Button
@@ -270,10 +254,9 @@ export function MaintenanceWidget({
         </div>
       </div>
 
-      {/* ── Divider ── */}
-      <div className="h-px bg-border/50 mx-5" />
+      <div className="h-px bg-border mx-5" />
 
-      {/* ── ML Prediction section ── */}
+      {/* ── ML Prediction ── */}
       <div className="px-5 py-4 space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5">
@@ -292,12 +275,12 @@ export function MaintenanceWidget({
           )}
         </div>
 
-        {/* ML unavailable state */}
+        {/* ML offline */}
         {!isMLAvailable && (
-          <div className="flex items-center gap-2.5 p-3 rounded-xl bg-muted/50 border border-border/50">
+          <div className="flex items-center gap-2.5 p-3 rounded-xl bg-muted/60 border border-border">
             <WifiOff className="w-4 h-4 text-muted-foreground shrink-0" />
             <div>
-              <p className="text-xs font-medium text-foreground">
+              <p className="text-xs font-semibold text-foreground">
                 ML Service Offline
               </p>
               <p className="text-[11px] text-muted-foreground mt-0.5">
@@ -353,7 +336,7 @@ export function MaintenanceWidget({
 
         {/* Recommendation */}
         {isMLAvailable && !isPredicting && recommendation && (
-          <div className="flex gap-2.5 p-3 rounded-xl bg-muted/40 border border-border/50">
+          <div className="flex gap-2.5 p-3 rounded-xl bg-muted/60 border border-border">
             <Sparkles className="w-3.5 h-3.5 text-muted-foreground mt-0.5 shrink-0" />
             <p className="text-[11px] text-muted-foreground leading-relaxed">
               {recommendation}
@@ -362,14 +345,12 @@ export function MaintenanceWidget({
         )}
       </div>
 
-      {/* ── Divider ── */}
-      <div className="h-px bg-border/50 mx-5" />
+      <div className="h-px bg-border mx-5" />
 
-      {/* ── Stats: Temp + Battery ── */}
+      {/* ── Stats ── */}
       <div className="px-5 py-4 grid grid-cols-2 gap-3">
-        {/* Temperature */}
-        <div className="flex items-center gap-3 p-3 rounded-xl bg-muted/40 border border-border/50">
-          <div className="p-1.5 rounded-lg bg-blue-100 dark:bg-blue-900/40 text-blue-500 dark:text-blue-400 shrink-0">
+        <div className="flex items-center gap-3 p-3 rounded-xl bg-muted/50 border border-border">
+          <div className="p-1.5 rounded-lg bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 shrink-0">
             <Thermometer className="w-4 h-4" />
           </div>
           <div className="min-w-0">
@@ -382,8 +363,7 @@ export function MaintenanceWidget({
           </div>
         </div>
 
-        {/* Battery */}
-        <div className="flex items-center gap-3 p-3 rounded-xl bg-muted/40 border border-border/50">
+        <div className="flex items-center gap-3 p-3 rounded-xl bg-muted/50 border border-border">
           <div
             className={cn(
               "p-1.5 rounded-lg shrink-0",

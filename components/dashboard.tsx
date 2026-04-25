@@ -115,20 +115,21 @@ export default function Dashboard({ user }: { user: User }) {
       label: "Udara Bersih",
       sublabel: "Semua parameter aman",
       classes:
-        "bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400",
+        "bg-emerald-100 border-emerald-300 text-emerald-700 dark:bg-emerald-500/10 dark:border-emerald-500/20 dark:text-emerald-300",
     },
     Warning: {
       icon: <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5" />,
       label: "Perhatian",
       sublabel: "Ada parameter tinggi",
       classes:
-        "bg-amber-500/10 border-amber-500/20 text-amber-600 dark:text-amber-400",
+        "bg-amber-100 border-amber-300 text-amber-700 dark:bg-amber-500/10 dark:border-amber-500/20 dark:text-amber-300",
     },
     Danger: {
       icon: <TriangleAlert className="w-4 h-4 sm:w-5 sm:h-5" />,
       label: "Berbahaya",
       sublabel: "Kualitas udara buruk",
-      classes: "bg-red-500/10 border-red-500/20 text-red-600 dark:text-red-400",
+      classes:
+        "bg-red-100 border-red-300 text-red-700 dark:bg-red-500/10 dark:border-red-500/20 dark:text-red-300",
     },
   };
 

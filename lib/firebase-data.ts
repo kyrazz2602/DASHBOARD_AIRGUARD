@@ -34,7 +34,8 @@ export async function getFanControl(): Promise<FanControlState | null> {
     const data = snapshot.val();
     return {
       speed: (data.speed as FanSpeed) || "off",
-      isAutoMode: data.isAutoMode !== undefined ? Boolean(data.isAutoMode) : true,
+      isAutoMode:
+        data.isAutoMode !== undefined ? Boolean(data.isAutoMode) : true,
       updatedAt: data.updatedAt,
     };
   }
@@ -48,7 +49,7 @@ export async function getFanControl(): Promise<FanControlState | null> {
  */
 export function listenToFanControl(
   callback: (state: FanControlState) => void,
-  onError?: (error: Error) => void
+  onError?: (error: Error) => void,
 ): () => void {
   const fanRef = ref(database, FAN_CONTROL_PATH);
 
@@ -59,7 +60,8 @@ export function listenToFanControl(
       if (data) {
         callback({
           speed: (data.speed as FanSpeed) || "off",
-          isAutoMode: data.isAutoMode !== undefined ? Boolean(data.isAutoMode) : true,
+          isAutoMode:
+            data.isAutoMode !== undefined ? Boolean(data.isAutoMode) : true,
           updatedAt: data.updatedAt,
         });
       } else {
@@ -70,7 +72,7 @@ export function listenToFanControl(
     (error: Error) => {
       console.error("Firebase fan control error:", error);
       if (onError) onError(error);
-    }
+    },
   );
 
   return () => off(fanRef, "value", listener);
@@ -90,7 +92,7 @@ export async function resetFilterStartDate(): Promise<void> {
  * Membaca/Subscribe ke perubahan tanggal filter dari Firebase
  */
 export function listenToFilterStartDate(
-  callback: (timestamp: number | null) => void
+  callback: (timestamp: number | null) => void,
 ): () => void {
   const filterRef = ref(database, "Command/filterStartDate");
   const listener = onValue(
@@ -105,7 +107,7 @@ export function listenToFilterStartDate(
     },
     (error: Error) => {
       console.error("Firebase filter error:", error);
-    }
+    },
   );
 
   return () => off(filterRef, "value", listener);
@@ -118,7 +120,7 @@ export function listenToFilterStartDate(
  */
 export function listenToSensorData(
   callback: (data: SensorReading) => void,
-  onError?: (error: Error) => void
+  onError?: (error: Error) => void,
 ) {
   // Use /Udara path to match Arduino code structure
   const sensorsRef = ref(database, "Udara");
@@ -127,7 +129,7 @@ export function listenToSensorData(
     sensorsRef,
     (snapshot: DataSnapshot) => {
       const data = snapshot.val();
-      
+
       if (data) {
         // Transform Firebase data to SensorReading format
         const sensorReading: SensorReading = {
@@ -135,11 +137,11 @@ export function listenToSensorData(
           pm10: Number(data.PM10) || 0,
           co: Number(data.CO) || 0,
           voc: Number(data.VOC) || 0,
-          suhu: Number(data.Suhu) || 0,
+          suhu: Number(data.Suhu) || 25, // fallback 25°C jika tidak ada data
           battery: Number(data.Persentase) || 0,
-          timestamp: new Date(), 
+          timestamp: new Date(),
         };
-        
+
         callback(sensorReading);
       }
     },
@@ -148,7 +150,7 @@ export function listenToSensorData(
       if (onError) {
         onError(error);
       }
-    }
+    },
   );
 
   // Return cleanup function
@@ -160,21 +162,21 @@ export function listenToSensorData(
 /**
  * Fetch historical sensor data from Firebase
  * Expected structure: /history/[timestamp]/{ pm25, pm10, co, voc }
- * 
+ *
  * If historical data is not available in Firebase, returns empty array
  * Components should fall back to simulated data in that case
  */
 export async function getHistoricalData(
-  days: number
+  days: number,
 ): Promise<HistoricalData[]> {
   return new Promise((resolve) => {
     const historyRef = ref(database, "history");
-    
+
     onValue(
       historyRef,
       (snapshot: DataSnapshot) => {
         const data = snapshot.val();
-        
+
         if (!data) {
           // No historical data available
           resolve([]);
@@ -202,15 +204,17 @@ export async function getHistoricalData(
         });
 
         // Sort by timestamp ascending
-        historicalData.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
-        
+        historicalData.sort(
+          (a, b) => a.timestamp.getTime() - b.timestamp.getTime(),
+        );
+
         resolve(historicalData);
       },
       (error: Error) => {
         console.error("Error fetching historical data:", error);
         resolve([]);
       },
-      { onlyOnce: true } // Only read once, not a continuous listener
+      { onlyOnce: true }, // Only read once, not a continuous listener
     );
   });
 }

@@ -13,22 +13,19 @@ interface SensorCardProps {
 
 const STATUS_STYLES = {
   Safe: {
-    dot: "bg-emerald-500",
+    dot: "bg-emerald-600 dark:bg-emerald-400",
     text: "text-emerald-700 dark:text-emerald-300",
     value: "text-emerald-700 dark:text-emerald-300",
-    glow: "shadow-emerald-500/10",
   },
   Warning: {
-    dot: "bg-amber-500",
+    dot: "bg-amber-600 dark:bg-amber-400",
     text: "text-amber-700 dark:text-amber-300",
     value: "text-amber-700 dark:text-amber-300",
-    glow: "shadow-amber-500/10",
   },
   Danger: {
-    dot: "bg-red-500",
+    dot: "bg-red-600 dark:bg-red-400",
     text: "text-red-700 dark:text-red-300",
     value: "text-red-700 dark:text-red-300",
-    glow: "shadow-red-500/10",
   },
 };
 
@@ -52,9 +49,8 @@ export function SensorCard({
   return (
     <Card
       className={cn(
-        "relative overflow-hidden p-4 sm:p-5 bg-card border border-border/60",
+        "relative overflow-hidden p-4 sm:p-5 bg-card border border-border",
         "hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5",
-        styles.glow,
         className,
       )}
     >
@@ -63,7 +59,7 @@ export function SensorCard({
         <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
           {label}
         </span>
-        <div className="text-muted-foreground/60">{icon}</div>
+        <div className="text-muted-foreground/70">{icon}</div>
       </div>
 
       {/* Value */}

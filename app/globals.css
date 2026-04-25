@@ -1,84 +1,87 @@
-@import 'tailwindcss';
-@import 'tw-animate-css';
+@import "tailwindcss";
+@import "tw-animate-css";
 
 @custom-variant dark (&:is(.dark *));
 
 :root {
   /* Light Mode: Icy/Sky Blue Glass */
-  --background: oklch(0.96 0.02 240); /* Biru sangat muda, hampir putih */
-  --foreground: oklch(0.25 0.1 250);  /* Biru tua pekat untuk teks */
-  
-  /* Glass Components: Putih dengan transparansi tinggi */
-  --card: oklch(1 0 0 / 0.65); 
-  --card-foreground: oklch(0.25 0.1 250);
-  
-  --popover: oklch(1 0 0 / 0.75);
-  --popover-foreground: oklch(0.25 0.1 250);
-  
+  --background: oklch(0.96 0.02 240);
+  --foreground: oklch(0.15 0.08 250); /* lebih gelap untuk kontras maksimal */
+
+  /* Card: putih solid agar teks terbaca */
+  --card: oklch(1 0 0 / 0.85);
+  --card-foreground: oklch(0.15 0.08 250);
+
+  --popover: oklch(1 0 0 / 0.9);
+  --popover-foreground: oklch(0.15 0.08 250);
+
   /* Primary: Electric Blue */
-  --primary: oklch(0.55 0.2 250);
+  --primary: oklch(
+    0.5 0.22 250
+  ); /* sedikit lebih gelap agar kontras di bg terang */
   --primary-foreground: oklch(1 0 0);
-  
-  --secondary: oklch(0.9 0.05 230);
-  --secondary-foreground: oklch(0.3 0.1 250);
-  
-  --muted: oklch(0.93 0.02 240);
-  --muted-foreground: oklch(0.5 0.05 250);
-  
-  --accent: oklch(0.9 0.08 240 / 0.5);
-  --accent-foreground: oklch(0.3 0.1 250);
-  
+
+  --secondary: oklch(0.88 0.05 230);
+  --secondary-foreground: oklch(0.2 0.1 250);
+
+  --muted: oklch(0.91 0.03 240);
+  --muted-foreground: oklch(
+    0.4 0.06 250
+  ); /* naik dari 0.5 → 0.40 agar lebih terbaca */
+
+  --accent: oklch(0.88 0.08 240 / 0.6);
+  --accent-foreground: oklch(0.2 0.1 250);
+
   --destructive: oklch(0.577 0.245 27.325);
   --destructive-foreground: oklch(0.985 0 0);
-  
-  /* Border: Biru muda transparan untuk efek "tepi kaca" */
-  --border: oklch(0.8 0.1 240 / 0.4);
-  --input: oklch(1 0 0 / 0.5);
-  --ring: oklch(0.55 0.2 250 / 0.5);
-  
-  --radius: 1rem; /* Radius lebih besar agar terlihat seperti kaca modern */
-  
-  /* Charts disesuaikan ke nuansa biru */
-  --chart-1: oklch(0.55 0.2 250); /* Blue */
-  --chart-2: oklch(0.65 0.15 220); /* Cyan */
-  --chart-3: oklch(0.45 0.2 270); /* Purple-Blue */
-  --chart-4: oklch(0.7 0.15 190); /* Teal */
-  --chart-5: oklch(0.8 0.1 240); /* Light Blue */
+
+  /* Border: lebih solid agar card terlihat jelas */
+  --border: oklch(0.75 0.08 240 / 0.55);
+  --input: oklch(1 0 0 / 0.7);
+  --ring: oklch(0.5 0.22 250 / 0.5);
+
+  --radius: 1rem;
+
+  --chart-1: oklch(0.5 0.22 250);
+  --chart-2: oklch(0.6 0.15 220);
+  --chart-3: oklch(0.42 0.2 270);
+  --chart-4: oklch(0.65 0.15 190);
+  --chart-5: oklch(0.75 0.1 240);
 }
 
 .dark {
   /* Dark Mode: Deep Ocean/Cyberpunk Blue */
   --background: oklch(0.1 0.05 250); /* Biru dongker sangat gelap */
   --foreground: oklch(0.95 0.02 240);
-  
+
   /* Glass Components: Biru gelap transparan */
   --card: oklch(0.15 0.08 250 / 0.5);
   --card-foreground: oklch(0.95 0.02 240);
-  
+
   --popover: oklch(0.15 0.08 250 / 0.7);
   --popover-foreground: oklch(0.95 0.02 240);
-  
+
   /* Primary: Neon Blue */
   --primary: oklch(0.65 0.25 250);
   --primary-foreground: oklch(1 0 0);
-  
+
   --secondary: oklch(0.25 0.1 250 / 0.5);
   --secondary-foreground: oklch(0.95 0.02 240);
-  
+
   --muted: oklch(0.2 0.05 250);
   --muted-foreground: oklch(0.7 0.05 240);
-  
+
   --accent: oklch(0.3 0.15 250 / 0.4);
   --accent-foreground: oklch(0.985 0 0);
-  
+
   --destructive: oklch(0.5 0.2 25);
   --destructive-foreground: oklch(0.985 0 0);
-  
+
   /* Border: Garis putih tipis transparan (khas Glassmorphism) */
   --border: oklch(1 0 0 / 0.15);
   --input: oklch(0.2 0.05 250 / 0.4);
   --ring: oklch(0.65 0.25 250 / 0.6);
-  
+
   --chart-1: oklch(0.65 0.25 250);
   --chart-2: oklch(0.75 0.2 220);
   --chart-3: oklch(0.55 0.25 270);
@@ -87,8 +90,8 @@
 }
 
 @theme inline {
-  --font-sans: 'Geist', 'Geist Fallback';
-  --font-mono: 'Geist Mono', 'Geist Mono Fallback';
+  --font-sans: "Geist", "Geist Fallback";
+  --font-mono: "Geist Mono", "Geist Mono Fallback";
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -123,15 +126,31 @@
   * {
     @apply border-border outline-ring/50;
   }
-  
+
   body {
     @apply bg-background text-foreground font-sans antialiased;
     /* Menambahkan Gradient Background agar efek kaca terlihat */
-    background-image: 
-      radial-gradient(at 0% 0%, oklch(0.55 0.2 250 / 0.15) 0px, transparent 50%),
-      radial-gradient(at 100% 0%, oklch(0.65 0.15 220 / 0.15) 0px, transparent 50%),
-      radial-gradient(at 100% 100%, oklch(0.55 0.2 250 / 0.15) 0px, transparent 50%),
-      radial-gradient(at 0% 100%, oklch(0.65 0.15 220 / 0.15) 0px, transparent 50%);
+    background-image:
+      radial-gradient(
+        at 0% 0%,
+        oklch(0.55 0.2 250 / 0.15) 0px,
+        transparent 50%
+      ),
+      radial-gradient(
+        at 100% 0%,
+        oklch(0.65 0.15 220 / 0.15) 0px,
+        transparent 50%
+      ),
+      radial-gradient(
+        at 100% 100%,
+        oklch(0.55 0.2 250 / 0.15) 0px,
+        transparent 50%
+      ),
+      radial-gradient(
+        at 0% 100%,
+        oklch(0.65 0.15 220 / 0.15) 0px,
+        transparent 50%
+      );
     background-attachment: fixed;
   }
 
@@ -139,16 +158,16 @@
     Jika kamu menggunakan komponen Shadcn UI standar,
     ini akan otomatis membuat card menjadi "Glassy".
   */
-  .bg-card, 
-  .bg-popover, 
+  .bg-card,
+  .bg-popover,
   .bg-background\/95,
   [role="dialog"],
   [role="menu"] {
     @apply backdrop-blur-xl border-t border-l border-white/20 shadow-xl;
   }
-  
+
   /* Khusus Dark Mode Glass Border yang lebih halus */
-  .dark .bg-card, 
+  .dark .bg-card,
   .dark .bg-popover {
     @apply border-white/10 shadow-black/20;
   }
