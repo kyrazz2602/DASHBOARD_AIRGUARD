@@ -27,8 +27,8 @@ export class MLServiceError extends Error {
  * Rule-based fallback for filter status classification.
  *
  * Postconditions:
- * - Returns "Ganti Filter" if pm25 > 75 OR pm10 > 150 OR co > 9 OR voc > 2
- * - Returns "Perhatian" if pm25 > 35 OR pm10 > 75 OR co > 2 OR voc > 0.5
+ * - Returns "Ganti Filter" if pm25 > 125.4 OR pm10 > 354 OR co > 50 OR voc > 2.2
+ * - Returns "Perhatian" if pm25 > 35.4 OR pm10 > 154 OR co > 15 OR voc > 0.22
  * - Returns "Aman" for all other conditions
  * - Never throws, never returns null
  */
@@ -36,12 +36,12 @@ export function getRuleBasedStatus(features: SensorFeatures): FilterStatus {
   const { pm25, pm10, co, voc } = features;
 
   // Check "Ganti Filter" threshold (most severe — check first)
-  if (pm25 > 75 || pm10 > 150 || co > 9 || voc > 2) {
+  if (pm25 > 125.4 || pm10 > 354 || co > 50 || voc > 2.2) {
     return "Ganti Filter";
   }
 
   // Check "Perhatian" threshold
-  if (pm25 > 35 || pm10 > 75 || co > 2 || voc > 0.5) {
+  if (pm25 > 35.4 || pm10 > 154 || co > 15 || voc > 0.22) {
     return "Perhatian";
   }
 

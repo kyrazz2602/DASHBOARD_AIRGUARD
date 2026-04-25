@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 const SENSOR_RANGES = {
   pm25: { min: 0, max: 1000 },
   pm10: { min: 0, max: 2000 },
-  co: { min: 0, max: 100 },
+  co: { min: 0, max: 1000 },
   voc: { min: 0, max: 50 },
   suhu: { min: -10, max: 60 },
 } as const;

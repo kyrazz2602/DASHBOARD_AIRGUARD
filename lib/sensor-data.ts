@@ -21,10 +21,10 @@ export interface HistoricalData {
 
 // WHO Air Quality Guidelines (μg/m³)
 export const WHO_STANDARDS = {
-  PM2_5: { safe: 15, warning: 35, danger: 75 },
-  PM10: { safe: 45, warning: 75, danger: 150 },
-  CO: { safe: 10, warning: 20, danger: 50 },
-  VOC: { safe: 5, warning: 10, danger: 20 },
+  PM2_5: { safe: 35.4, warning: 125.4, danger: 125.5 },
+  PM10: { safe: 154, warning: 354, danger: 355 },
+  CO: { safe: 15, warning: 50, danger: 50 },
+  VOC: { safe: 0.22, warning: 2.2, danger: 2.2 },
 };
 
 export function generateSensorData(): SensorReading {
