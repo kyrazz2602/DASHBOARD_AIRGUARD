@@ -172,3 +172,49 @@
     @apply border-white/10 shadow-black/20;
   }
 }
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes deviceFloat {
+  0%,
+  100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  25% {
+    transform: translateY(-8px) rotate(0.4deg);
+  }
+  75% {
+    transform: translateY(-4px) rotate(-0.4deg);
+  }
+}
+
+/* Hero right-image custom animations */
+@keyframes floatY {
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    transform: translateY(-100%);
+  }
+  60% {
+    transform: translateY(200%);
+  }
+  100% {
+    transform: translateY(200%);
+  }
+}

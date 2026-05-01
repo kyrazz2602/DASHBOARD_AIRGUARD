@@ -358,7 +358,7 @@ export function MaintenanceWidget({
               Suhu
             </p>
             <p className="text-sm font-bold text-foreground leading-tight">
-              {temperature}°C
+              {Number(temperature).toFixed(1)}°C
             </p>
           </div>
         </div>
