@@ -320,12 +320,12 @@ export default function HomePage() {
             {/* Inlet label */}
             <div className="hidden lg:flex flex-col items-center justify-center pr-4 shrink-0">
               <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest">
-                  <span className="w-8 h-px bg-border" />
+                <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-destructive">
+                  <span className="w-8 h-px bg-destructive/40" />
                   Udara Kotor
                 </div>
                 <div className="flex gap-1">
-                  {["PM10", "CO", "VOC"].map((p) => (
+                  {["PM2.5", "PM10", "CO", "VOC"].map((p) => (
                     <span
                       key={p}
                       className="text-[9px] px-1.5 py-0.5 rounded bg-destructive/10 text-destructive border border-destructive/20 font-medium"
@@ -539,9 +539,9 @@ export default function HomePage() {
               unit="ppm"
               desc="Senyawa Organik Volatil"
               detail="Senyawa kimia organik yang mudah menguap dari cat, furnitur, dan produk pembersih rumah tangga."
-              limit="≤ 5"
-              safeValue={5}
-              exampleValue={2}
+              limit="< 20"
+              safeValue={20}
+              exampleValue={12}
               color="text-green-500"
               iconBg="from-green-500/20 to-emerald-500/10"
               accentBorder="border-green-500/30"

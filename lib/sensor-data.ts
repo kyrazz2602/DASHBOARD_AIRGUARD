@@ -24,7 +24,7 @@ export const WHO_STANDARDS = {
   PM2_5: { safe: 35.4, warning: 125.4, danger: 125.5 },
   PM10: { safe: 154, warning: 354, danger: 355 },
   CO: { safe: 15, warning: 50, danger: 50 },
-  VOC: { safe: 0.22, warning: 2.2, danger: 2.2 },
+  VOC: { safe: 20, warning: 100, danger: 100 },
 };
 
 export function generateSensorData(): SensorReading {
