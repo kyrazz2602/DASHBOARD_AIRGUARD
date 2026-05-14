@@ -7,14 +7,22 @@ import { setGerakCommand } from "@/lib/firebase-data";
 
 // ── Color Palette ─────────────────────────────────────────────────────────────
 const C = {
-  bg: "#0B0E14", // deep background
-  bgAlt: "#0D1117", // panel / header
-  fill: "#152238", // button fill
-  fillAct: "#1A2B42", // button fill active
-  neon: "#00F2FF", // primary neon cyan
-  neonAct: "#00D1FF", // neon active
-  stop: "#FF3B30", // emergency stop
+  bg: "#0B0E14",
+  bgAlt: "#0D1117",
+  fill: "#152238",
+  fillAct: "#1A2B42",
+  neon: "#00F2FF",
+  neonAct: "#00D1FF",
+  stop: "#FF3B30",
 } as const;
+
+// D-Pad direction → Firebase gerak value
+const GERAK_MAP: Record<"up" | "down" | "left" | "right", string> = {
+  up: "MAJU",
+  down: "MUNDUR",
+  left: "KIRI",
+  right: "KANAN",
+};
 
 interface RemoteControlModalProps {
   isOpen: boolean;
@@ -25,18 +33,21 @@ interface RemoteControlModalProps {
 function RadarView({
   posX,
   posY,
+  activeDir,
   className,
   style,
 }: {
   posX: number;
   posY: number;
-  nx?: number;
-  ny?: number;
+  activeDir: string | null;
   className?: string;
   style?: React.CSSProperties;
 }) {
   const dotX = 50 + posX * 0.35;
   const dotY = 50 + posY * 0.35;
+
+  // Continuous position update while a direction is held
+  // (handled in parent via RAF, posX/posY already updated)
 
   return (
     <div
@@ -69,13 +80,17 @@ function RadarView({
         />
 
         <div
-          className="absolute w-4 h-4 rounded-full border-2 border-white z-10 transition-all duration-300 ease-out"
+          className="absolute w-4 h-4 rounded-full border-2 border-white z-10 ease-out"
           style={{
             left: `${dotX}%`,
             top: `${dotY}%`,
             transform: "translate(-50%, -50%)",
             background: C.neon,
             boxShadow: `0 0 14px ${C.neon}, 0 0 28px ${C.neon}88`,
+            // Smooth when moving, instant when stopped
+            transition: activeDir
+              ? "left 0.1s linear, top 0.1s linear"
+              : "left 0.3s ease-out, top 0.3s ease-out",
           }}
         >
           <div
@@ -97,12 +112,13 @@ function RadarView({
 }
 
 // ── D-Pad ─────────────────────────────────────────────────────────────────────
-// Only 4 arc buttons (N/E/S/W) — no side paddles, no center circle
 function DPad({
-  onMove,
+  onPressStart,
+  onPressEnd,
   activeDir,
 }: {
-  onMove: (dir: "up" | "down" | "left" | "right") => void;
+  onPressStart: (dir: "up" | "down" | "left" | "right") => void;
+  onPressEnd: () => void;
   activeDir: string | null;
 }) {
   const SIZE = 200;
@@ -110,17 +126,15 @@ function DPad({
   const cy = SIZE / 2;
   const outerR = 90;
   const innerR = 54;
-  const GAP = 8; // degrees gap between segments
+  const GAP = 8;
 
   const isAct = (d: string) => activeDir === d;
 
-  // polar → cartesian (0° = top, clockwise)
   const pt = (r: number, deg: number) => ({
     x: cx + r * Math.sin((deg * Math.PI) / 180),
     y: cy - r * Math.cos((deg * Math.PI) / 180),
   });
 
-  // Annular arc (donut slice) path
   const arcPath = (r1: number, r2: number, a1: number, a2: number) => {
     const A = pt(r1, a1),
       B = pt(r1, a2);
@@ -136,7 +150,6 @@ function DPad({
     ].join(" ");
   };
 
-  // Small filled triangle pointing in the direction
   const triPath = (
     dir: "up" | "down" | "left" | "right",
     x: number,
@@ -195,7 +208,6 @@ function DPad({
           </radialGradient>
         </defs>
 
-        {/* Outer decorative ring */}
         <circle
           cx={cx}
           cy={cy}
@@ -207,7 +219,6 @@ function DPad({
           filter="url(#glow-idle)"
         />
 
-        {/* 4 directional arc buttons */}
         {dirArcs.map(({ dir, mid }) => {
           const act = isAct(dir);
           const a1 = mid - 50 + GAP;
@@ -217,8 +228,16 @@ function DPad({
           return (
             <g
               key={dir}
-              onClick={() => onMove(dir)}
-              style={{ cursor: "pointer" }}
+              // Press & hold — pointer events for touch + mouse
+              onPointerDown={(e) => {
+                e.currentTarget.setPointerCapture(e.pointerId);
+                onPressStart(dir);
+              }}
+              onPointerUp={onPressEnd}
+              onPointerCancel={onPressEnd}
+              // Prevent context menu on long-press mobile
+              onContextMenu={(e) => e.preventDefault()}
+              style={{ cursor: "pointer", userSelect: "none" }}
               filter={act ? "url(#glow-on)" : "url(#glow-idle)"}
             >
               <path
@@ -246,119 +265,146 @@ export function RemoteControlModal({
   onClose,
 }: RemoteControlModalProps) {
   const [position, setPosition] = useState({ x: 0, y: 0 });
-  const [activeDir, setActiveDir] = useState<string | null>(null);
-  const [joystickVec, setJoystickVec] = useState({ nx: 0, ny: 0 });
+  const [activeDir, setActiveDir] = useState<
+    "up" | "down" | "left" | "right" | null
+  >(null);
   const [isSyncing, setIsSyncing] = useState(false);
 
   const clamp = (v: number) => Math.max(-100, Math.min(100, v));
 
-  // Map D-Pad direction → Firebase gerak command
-  const GERAK_MAP: Record<"up" | "down" | "left" | "right", string> = {
-    up: "MAJU",
-    down: "MUNDUR",
-    left: "KIRI",
-    right: "KANAN",
-  };
+  // Refs to avoid stale closures in RAF
+  const activeDirRef = useRef<"up" | "down" | "left" | "right" | null>(null);
+  const rafRef = useRef<number | null>(null);
+  const lastSendRef = useRef<number>(0);
 
-  // Debounce ref — kirim ke Firebase max 1x per 200ms
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const sendGerak = useCallback((gerak: string) => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(async () => {
-      try {
-        setIsSyncing(true);
-        await setGerakCommand(gerak);
-      } catch (err) {
-        console.error("[RemoteControl] Failed to send gerak:", err);
-      } finally {
-        setIsSyncing(false);
-      }
-    }, 80);
+  // ── Send gerak to Firebase (throttled to 1x per 100ms) ───────────────────
+  const sendGerak = useCallback(async (gerak: string) => {
+    const now = Date.now();
+    if (now - lastSendRef.current < 100) return;
+    lastSendRef.current = now;
+    try {
+      setIsSyncing(true);
+      await setGerakCommand(gerak);
+    } catch (err) {
+      console.error("[RemoteControl] Failed to send gerak:", err);
+    } finally {
+      setIsSyncing(false);
+    }
   }, []);
 
-  const move = useCallback(
-    (dir: "up" | "down" | "left" | "right") => {
-      setActiveDir(dir);
-      const vecMap = {
-        up: { nx: 0, ny: -1 },
-        down: { nx: 0, ny: 1 },
-        left: { nx: -1, ny: 0 },
-        right: { nx: 1, ny: 0 },
-      };
-      setJoystickVec(vecMap[dir]);
-      setTimeout(() => {
-        setActiveDir(null);
-        setJoystickVec({ nx: 0, ny: 0 });
-      }, 150);
+  // ── RAF loop: move dot + send Firebase while held ─────────────────────────
+  useEffect(() => {
+    const STEP = 0.8; // pixels per frame at 60fps
 
-      // Update radar dot
-      const STEP = 15;
-      setPosition((prev) => {
-        switch (dir) {
-          case "up":
-            return { ...prev, y: clamp(prev.y - STEP) };
-          case "down":
-            return { ...prev, y: clamp(prev.y + STEP) };
-          case "left":
-            return { ...prev, x: clamp(prev.x - STEP) };
-          case "right":
-            return { ...prev, x: clamp(prev.x + STEP) };
-        }
-      });
+    const loop = () => {
+      const dir = activeDirRef.current;
+      if (dir) {
+        setPosition((prev) => {
+          switch (dir) {
+            case "up":
+              return { ...prev, y: clamp(prev.y - STEP) };
+            case "down":
+              return { ...prev, y: clamp(prev.y + STEP) };
+            case "left":
+              return { ...prev, x: clamp(prev.x - STEP) };
+            case "right":
+              return { ...prev, x: clamp(prev.x + STEP) };
+          }
+        });
+        // Throttled Firebase send
+        sendGerak(GERAK_MAP[dir]);
+      }
+      rafRef.current = requestAnimationFrame(loop);
+    };
 
-      // Send to Firebase
-      sendGerak(GERAK_MAP[dir]);
-    },
-    [sendGerak],
-  );
-
-  const handleReset = useCallback(() => {
-    setPosition({ x: 0, y: 0 });
-    setJoystickVec({ nx: 0, ny: 0 });
-    setActiveDir("reset");
-    setTimeout(() => setActiveDir(null), 200);
-    // Stop movement
-    sendGerak("DIAM");
+    rafRef.current = requestAnimationFrame(loop);
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
   }, [sendGerak]);
 
+  // ── Press start ───────────────────────────────────────────────────────────
+  const handlePressStart = useCallback(
+    (dir: "up" | "down" | "left" | "right") => {
+      activeDirRef.current = dir;
+      setActiveDir(dir);
+      // Send immediately on first press (don't wait for RAF throttle)
+      setGerakCommand(GERAK_MAP[dir]).catch(console.error);
+    },
+    [],
+  );
+
+  // ── Press end → send DIAM ─────────────────────────────────────────────────
+  const handlePressEnd = useCallback(() => {
+    if (!activeDirRef.current) return;
+    activeDirRef.current = null;
+    setActiveDir(null);
+    setGerakCommand("DIAM").catch(console.error);
+  }, []);
+
+  // ── Reset ─────────────────────────────────────────────────────────────────
+  const handleReset = useCallback(() => {
+    activeDirRef.current = null;
+    setActiveDir(null);
+    setPosition({ x: 0, y: 0 });
+    setGerakCommand("DIAM").catch(console.error);
+  }, []);
+
+  // ── Keyboard: keydown = press start, keyup = press end ───────────────────
   useEffect(() => {
     if (!isOpen) return;
-    const onKey = (e: KeyboardEvent) => {
+
+    const KEY_MAP: Record<string, "up" | "down" | "left" | "right"> = {
+      ArrowUp: "up",
+      w: "up",
+      W: "up",
+      ArrowDown: "down",
+      s: "down",
+      S: "down",
+      ArrowLeft: "left",
+      a: "left",
+      A: "left",
+      ArrowRight: "right",
+      d: "right",
+      D: "right",
+    };
+
+    const onKeyDown = (e: KeyboardEvent) => {
       if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key))
         e.preventDefault();
-      switch (e.key) {
-        case "ArrowUp":
-        case "w":
-        case "W":
-          move("up");
-          break;
-        case "ArrowDown":
-        case "s":
-        case "S":
-          move("down");
-          break;
-        case "ArrowLeft":
-        case "a":
-        case "A":
-          move("left");
-          break;
-        case "ArrowRight":
-        case "d":
-        case "D":
-          move("right");
-          break;
-        case "Escape":
-          onClose();
-          break;
-        case " ":
-          handleReset();
-          break;
+      if (e.repeat) return; // ignore key-repeat — RAF handles continuous movement
+      if (e.key === "Escape") {
+        onClose();
+        return;
       }
+      if (e.key === " ") {
+        handleReset();
+        return;
+      }
+      const dir = KEY_MAP[e.key];
+      if (dir) handlePressStart(dir);
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [isOpen, move, onClose, handleReset]);
+
+    const onKeyUp = (e: KeyboardEvent) => {
+      const dir = KEY_MAP[e.key];
+      if (dir && activeDirRef.current === dir) handlePressEnd();
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup", onKeyUp);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
+    };
+  }, [isOpen, handlePressStart, handlePressEnd, handleReset, onClose]);
+
+  // ── Cleanup on close ──────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!isOpen) {
+      activeDirRef.current = null;
+      setActiveDir(null);
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -383,11 +429,21 @@ export function RemoteControlModal({
           >
             Remote Control
           </span>
+          {/* Sync indicator */}
           {isSyncing && (
             <span
               className="w-1.5 h-1.5 rounded-full animate-pulse"
               style={{ background: C.neon }}
             />
+          )}
+          {/* Active direction label */}
+          {activeDir && (
+            <span
+              className="text-[10px] font-mono px-2 py-0.5 rounded"
+              style={{ background: `${C.neon}18`, color: C.neon }}
+            >
+              {GERAK_MAP[activeDir]}
+            </span>
           )}
         </div>
         <button
@@ -407,8 +463,7 @@ export function RemoteControlModal({
         <RadarView
           posX={position.x}
           posY={position.y}
-          nx={joystickVec.nx}
-          ny={joystickVec.ny}
+          activeDir={activeDir}
           className="flex-1 w-full min-h-[40vh] lg:min-h-0"
         />
 
@@ -421,10 +476,14 @@ export function RemoteControlModal({
             className="text-[11px] uppercase tracking-widest"
             style={{ color: `${C.neon}66` }}
           >
-            Drag to navigate
+            Tahan untuk bergerak
           </p>
 
-          <DPad onMove={move} activeDir={activeDir} />
+          <DPad
+            onPressStart={handlePressStart}
+            onPressEnd={handlePressEnd}
+            activeDir={activeDir}
+          />
 
           {/* STOP & RESET */}
           <div className="flex flex-col w-full gap-3">
@@ -485,7 +544,7 @@ export function RemoteControlModal({
             style={{ color: `${C.neon}33` }}
           >
             <Keyboard className="w-3 h-3" />
-            <span>Arrow Keys / WASD supported</span>
+            <span>Tahan Arrow Keys / WASD</span>
           </div>
         </div>
       </div>
