@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import { useSensorData } from "@/hooks/use-sensor-data";
 import { SensorCard } from "@/components/sensor-card";
-import { DevicePanel } from "@/components/device-panel";
 import { ControlsSection } from "@/components/controls-section";
 import { ChartSection } from "@/components/chart-section";
 import { MaintenanceWidget } from "@/components/maintenance-widget";
@@ -156,54 +155,62 @@ export default function Dashboard({ user }: { user: User }) {
             <p className="text-sm text-muted-foreground mt-1">{today}</p>
           </div>
 
-          {/* Air Quality Status Pill */}
-          <div
-            className={cn(
-              "flex items-center gap-2.5 px-4 py-2.5 rounded-2xl border backdrop-blur-sm shadow-sm shrink-0 transition-colors duration-500",
-              sc.classes,
-            )}
-          >
-            {sc.icon}
-            <div className="hidden sm:block">
-              <p className="text-xs font-bold leading-tight">{sc.label}</p>
-              <p className="text-[10px] opacity-70 leading-tight">
-                {sc.sublabel}
-              </p>
+          {/* Right side: air quality status */}
+          <div className="flex items-center gap-2 shrink-0">
+            {/* Air Quality Status Pill */}
+            <div
+              className={cn(
+                "flex items-center gap-2.5 px-4 py-2.5 rounded-2xl border backdrop-blur-sm shadow-sm transition-colors duration-500",
+                sc.classes,
+              )}
+            >
+              {sc.icon}
+              <div className="hidden sm:block">
+                <p className="text-xs font-bold leading-tight">{sc.label}</p>
+                <p className="text-[10px] opacity-70 leading-tight">
+                  {sc.sublabel}
+                </p>
+              </div>
+              <span className="sm:hidden text-xs font-bold">{sc.label}</span>
             </div>
-            <span className="sm:hidden text-xs font-bold">{sc.label}</span>
           </div>
         </div>
 
         {/* ── Sensor Cards ── */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 animate-in slide-in-from-bottom-4 duration-500 delay-100">
-          <SensorCard
-            label="PM2.5"
-            value={sensorData.pm25}
-            unit="μg/m³"
-            type="PM2_5"
-            icon={<Wind className="w-4 h-4" />}
-          />
-          <SensorCard
-            label="PM10"
-            value={sensorData.pm10}
-            unit="μg/m³"
-            type="PM10"
-            icon={<Droplets className="w-4 h-4" />}
-          />
-          <SensorCard
-            label="CO"
-            value={sensorData.co}
-            unit="ppm"
-            type="CO"
-            icon={<Flame className="w-4 h-4" />}
-          />
-          <SensorCard
-            label="VOC"
-            value={sensorData.voc}
-            unit="ppm"
-            type="VOC"
-            icon={<Leaf className="w-4 h-4" />}
-          />
+        <div className="animate-in slide-in-from-bottom-4 duration-500 delay-100">
+          <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-3">
+            Kualitas Udara Real-time
+          </p>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <SensorCard
+              label="PM2.5"
+              value={sensorData.pm25}
+              unit="μg/m³"
+              type="PM2_5"
+              icon={<Wind className="w-4 h-4" />}
+            />
+            <SensorCard
+              label="PM10"
+              value={sensorData.pm10}
+              unit="μg/m³"
+              type="PM10"
+              icon={<Droplets className="w-4 h-4" />}
+            />
+            <SensorCard
+              label="CO"
+              value={sensorData.co}
+              unit="ppm"
+              type="CO"
+              icon={<Flame className="w-4 h-4" />}
+            />
+            <SensorCard
+              label="VOC"
+              value={sensorData.voc}
+              unit="ppm"
+              type="VOC"
+              icon={<Leaf className="w-4 h-4" />}
+            />
+          </div>
         </div>
 
         {/* ── Main Grid ── */}
@@ -211,7 +218,9 @@ export default function Dashboard({ user }: { user: User }) {
           {/* Left Sidebar — desktop only */}
           <aside className="lg:col-span-3 hidden lg:flex flex-col gap-5">
             <div className="sticky top-24 space-y-5">
-              <DevicePanel name="AIRGUARD" status="Aktif" deviceId="DEV-001" />
+              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
+                Pemeliharaan Filter
+              </p>
               <MaintenanceWidget
                 filterHealth={healthPct}
                 daysRemaining={daysRemaining}
@@ -232,22 +241,32 @@ export default function Dashboard({ user }: { user: User }) {
 
           {/* Main Content */}
           <div className="lg:col-span-9 space-y-5">
-            {/* Device Panel — mobile only */}
-            <div className="lg:hidden">
-              <DevicePanel name="AIRGUARD" status="Aktif" deviceId="DEV-001" />
+            {/* Controls */}
+            <div>
+              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-3">
+                Kontrol Perangkat
+              </p>
+              <ControlsSection
+                sensorData={sensorData}
+                onFanSpeedChange={(speed) =>
+                  console.log("Speed changed:", speed)
+                }
+              />
             </div>
 
-            {/* Controls */}
-            <ControlsSection
-              sensorData={sensorData}
-              onFanSpeedChange={(speed) => console.log("Speed changed:", speed)}
-            />
-
             {/* Chart */}
-            <ChartSection />
+            <div>
+              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-3">
+                Grafik Sensor
+              </p>
+              <ChartSection />
+            </div>
 
             {/* Maintenance — mobile only */}
             <div className="lg:hidden">
+              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-3">
+                Pemeliharaan Filter
+              </p>
               <MaintenanceWidget
                 filterHealth={healthPct}
                 daysRemaining={daysRemaining}

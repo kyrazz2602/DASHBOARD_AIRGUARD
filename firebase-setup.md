@@ -1,7 +1,8 @@
-# Firebase Database Structure
+# Firebase Realtime Database — Setup & Structure
 
-## 1. Realtime Database Rules
-Di Firebase Console → Realtime Database → Rules, tambahkan:
+## 1. Database Rules
+
+Di Firebase Console → Realtime Database → Rules:
 
 ```json
 {
@@ -10,7 +11,7 @@ Di Firebase Console → Realtime Database → Rules, tambahkan:
       ".read": "auth != null",
       ".write": "auth != null"
     },
-    "history": {
+    "Status": {
       ".read": "auth != null",
       ".write": "auth != null"
     },
@@ -18,7 +19,7 @@ Di Firebase Console → Realtime Database → Rules, tambahkan:
       ".read": "auth != null",
       ".write": "auth != null"
     },
-    "Status": {
+    "history": {
       ".read": "auth != null",
       ".write": "auth != null"
     }
@@ -26,50 +27,96 @@ Di Firebase Console → Realtime Database → Rules, tambahkan:
 }
 ```
 
-
-**PENTING**: Path `/Udara` digunakan untuk data real-time dari Arduino, sedangkan `/history` untuk data historis.
+---
 
 ## 2. Database Structure
 
-### Real-time Data Path: `/Udara` (sesuai kode Arduino)
+### `/Udara` — Data sensor real-time (ditulis Arduino)
 
 ```json
 {
   "Udara": {
     "PM25": 12.5,
-    "PM10": 18.3,
-    "CO": 15.2,
-    "VOC": 8.7,
-    "Suhu": 28.5,
-    "Persentase": 22
+    "PM10": 20.1,
+    "CO": 3.2,
+    "VOC": 1.8,
+    "Suhu": 29.4,
+    "Tegangan": 15.8,
+    "Persentase": 87
   }
 }
 ```
 
-### Command Path: `/Command` (Untuk mengontrol perangkat)
+| Field        | Tipe   | Satuan | Keterangan                 |
+| ------------ | ------ | ------ | -------------------------- |
+| `PM25`       | number | μg/m³  | Partikel 2.5 mikron        |
+| `PM10`       | number | μg/m³  | Partikel 10 mikron         |
+| `CO`         | number | ppm    | Karbon monoksida           |
+| `VOC`        | number | ppm    | Volatile Organic Compounds |
+| `Suhu`       | number | °C     | Suhu udara                 |
+| `Tegangan`   | number | V      | Tegangan baterai           |
+| `Persentase` | number | %      | Persentase baterai         |
+
+---
+
+### `/Status` — Status aktual perangkat (ditulis Arduino, read-only dari app)
+
+```json
+{
+  "Status": {
+    "kipas": "HIGH",
+    "gerak": "MAJU",
+    "rpmKanan": 48.2,
+    "rpmKiri": 47.9
+  }
+}
+```
+
+| Field      | Tipe   | Nilai                                             | Keterangan             |
+| ---------- | ------ | ------------------------------------------------- | ---------------------- |
+| `kipas`    | string | `OFF` \| `LOW` \| `NORMAL` \| `HIGH`              | Kecepatan kipas aktual |
+| `gerak`    | string | `MAJU` \| `MUNDUR` \| `KIRI` \| `KANAN` \| `DIAM` | Arah gerak aktual      |
+| `rpmKanan` | number | —                                                 | RPM motor kanan        |
+| `rpmKiri`  | number | —                                                 | RPM motor kiri         |
+
+---
+
+### `/Command` — Perintah dari app ke Arduino
 
 ```json
 {
   "Command": {
-    "speed": "low",
+    "speed": "HIGH",
+    "gerak": "MAJU",
     "isAutoMode": true,
+    "filterStartDate": 1708923456789,
     "updatedAt": 1708923456789
   }
 }
 ```
 
-### Status Path: `/Status` (Untuk membaca status dari perangkat)
+| Field             | Tipe    | Nilai                                             | Keterangan                                |
+| ----------------- | ------- | ------------------------------------------------- | ----------------------------------------- |
+| `speed`           | string  | `OFF` \| `LOW` \| `NORMAL` \| `HIGH`              | Perintah kecepatan kipas                  |
+| `gerak`           | string  | `MAJU` \| `MUNDUR` \| `KIRI` \| `KANAN` \| `DIAM` | Perintah arah gerak (dari Remote Control) |
+| `isAutoMode`      | boolean | `true` / `false`                                  | Mode otomatis aktif                       |
+| `filterStartDate` | number  | timestamp ms                                      | Tanggal reset filter terakhir             |
+| `updatedAt`       | number  | timestamp ms                                      | Waktu update terakhir dari app            |
 
-```json
-{
-  "Status": {
-    "isOnline": true,
-    "lastPing": 1708923456789
-  }
-}
-```
+**Mapping Remote Control → `/Command/gerak`:**
 
-### Historical Data Path: `/history`
+| Tombol D-Pad | Value Firebase |
+| ------------ | -------------- |
+| ↑ (Up)       | `MAJU`         |
+| ↓ (Down)     | `MUNDUR`       |
+| ← (Left)     | `KIRI`         |
+| → (Right)    | `KANAN`        |
+| Stop / Reset | `DIAM`         |
+
+---
+
+### `/history` — Data historis sensor
+
 ```json
 {
   "history": {
@@ -77,70 +124,107 @@ Di Firebase Console → Realtime Database → Rules, tambahkan:
       "pm25": 11.2,
       "pm10": 16.8,
       "co": 14.5,
-      "voc": 7.9
-    },
-    "1708923600000": {
-      "pm25": 13.1,
-      "pm10": 19.2,
-      "co": 16.1,
-      "voc": 8.3
+      "voc": 7.9,
+      "suhu": 28.1,
+      "tegangan": 15.5,
+      "battery": 90
     }
   }
 }
 ```
 
-## 3. Test Data Upload (Optional)
-Gunakan script ini untuk mengupload test data:
+Key adalah Unix timestamp dalam milidetik. Data digunakan untuk grafik 3d / 7d.
+
+---
+
+## 3. Alur Data
+
+```
+Arduino ──writes──▶ /Udara      (sensor readings)
+Arduino ──writes──▶ /Status     (actual device state)
+
+App     ──writes──▶ /Command    (fan speed, gerak, auto mode)
+App     ──reads──▶  /Udara      (display sensor cards & chart)
+App     ──reads──▶  /Status     (display actual device state)
+App     ──reads──▶  /Command    (sync fan control UI)
+```
+
+---
+
+## 4. Test Data (Browser Console)
 
 ```javascript
-// Di browser console Firebase
-const database = firebase.database();
+const db = firebase.database();
 
-// Update command data (contoh fan control)
-database.ref('Command').set({
-  speed: "low",
-  isAutoMode: true,
-  updatedAt: Date.now()
+// Simulasi data sensor dari Arduino
+db.ref("Udara").set({
+  PM25: 12.5,
+  PM10: 20.1,
+  CO: 3.2,
+  VOC: 1.8,
+  Suhu: 29.4,
+  Tegangan: 15.8,
+  Persentase: 87,
 });
 
-// Add historical data
-const historicalData = {
+// Simulasi status perangkat
+db.ref("Status").set({
+  kipas: "HIGH",
+  gerak: "MAJU",
+  rpmKanan: 48.2,
+  rpmKiri: 47.9,
+});
+
+// Kirim perintah ke perangkat
+db.ref("Command").set({
+  speed: "NORMAL",
+  gerak: "DIAM",
+  isAutoMode: false,
+  updatedAt: Date.now(),
+});
+
+// Tambah data historis
+db.ref("history/" + Date.now()).set({
   pm25: 11.2,
   pm10: 16.8,
   co: 14.5,
-  voc: 7.9
-};
-database.ref('history/' + Date.now()).set(historicalData);
+  voc: 7.9,
+  suhu: 28.1,
+  tegangan: 15.5,
+  battery: 90,
+});
 ```
 
-## 4. Testing Firebase Connection
-
-Gunakan utility `firebase-test.ts` untuk testing koneksi:
-
-```javascript
-import { testFirebaseConnection, checkFirebaseEnvironment } from '@/lib/firebase-test';
-
-// Check environment variables
-const envCheck = checkFirebaseEnvironment();
-console.log('Environment check:', envCheck);
-
-// Test connection
-const connectionTest = await testFirebaseConnection();
-console.log('Connection test:', connectionTest);
-```
+---
 
 ## 5. Troubleshooting
 
-### Error: "permission_denied at /Udara atau /Command"
-- Pastikan Firebase Rules sudah diupdate dengan rules terbaru (Udara, history, Command, Status)
-- Check database URL di environment variables
-- Pastikan project ID benar
+### `permission_denied` di `/Udara`, `/Status`, atau `/Command`
 
-### Error: "Missing environment variables"
-- Buat file `.env.local` dengan Firebase configuration
-- Pastikan semua variabel required ada
+- Pastikan Firebase Rules sudah diupdate sesuai bagian 1
+- Cek database URL di `.env.local`
+- Pastikan user sudah login (rules menggunakan `auth != null`)
 
-### Error: "Connection timeout"
-- Check internet connection
-- Pastikan Firebase project aktif
-- Verify database URL format
+### Missing environment variables
+
+Buat file `.env.local` di root project:
+
+```env
+NEXT_PUBLIC_FIREBASE_API_KEY=...
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=...
+NEXT_PUBLIC_FIREBASE_DATABASE_URL=...
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=...
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=...
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=...
+NEXT_PUBLIC_FIREBASE_APP_ID=...
+```
+
+### Data sensor tidak muncul di dashboard
+
+- Pastikan Arduino menulis ke path `/Udara` dengan field name persis (case-sensitive): `PM25`, `PM10`, `CO`, `VOC`, `Suhu`, `Tegangan`, `Persentase`
+- Cek Firebase Console → Realtime Database untuk memverifikasi data masuk
+
+### Remote Control tidak menggerakkan robot
+
+- Pastikan Arduino membaca `/Command/gerak` dan merespons nilai `MAJU`, `MUNDUR`, `KIRI`, `KANAN`, `DIAM`
+- Cek tab Network di browser untuk memastikan write ke Firebase berhasil (tidak ada 401/403)

@@ -5,7 +5,8 @@ export interface SensorReading {
   co: number;
   voc: number;
   suhu: number;
-  battery: number;
+  battery: number; // Persentase (%)
+  tegangan: number; // Tegangan (V)
   timestamp: Date;
 }
 
@@ -16,6 +17,7 @@ export interface HistoricalData {
   voc: number;
   suhu: number;
   battery: number;
+  tegangan: number;
   timestamp: Date;
 }
 
@@ -44,6 +46,7 @@ export function generateSensorData(): SensorReading {
     voc: Math.max(0, baseValues.voc),
     suhu: Math.max(0, baseValues.suhu),
     battery: Math.max(5, 100 - Math.floor(Math.random() * 20)),
+    tegangan: Math.max(0, 12 + Math.random() * 4),
     timestamp: new Date(),
   };
 }
@@ -67,6 +70,7 @@ export function generateHistoricalData(days: number): HistoricalData[] {
         voc: Math.max(0, 8 + Math.cos(dayOffset / 2.2) * 4 + Math.random() * 2),
         suhu: Math.max(0, 25 + Math.sin(dayOffset / 4) * 3 + Math.random() * 2),
         battery: Math.max(5, 100 - Math.floor(Math.random() * 20)),
+        tegangan: Math.max(0, 12 + Math.random() * 4),
       });
     }
   }

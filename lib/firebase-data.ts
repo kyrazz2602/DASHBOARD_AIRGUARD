@@ -2,7 +2,7 @@ import { database, ref, onValue, off, set, get } from "./firebase";
 import { SensorReading, HistoricalData, FanSpeed } from "./sensor-data";
 import type { DataSnapshot } from "firebase/database";
 
-// ─── Fan Control ─────────────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface FanControlState {
   speed: FanSpeed;
@@ -10,30 +10,132 @@ export interface FanControlState {
   updatedAt?: number;
 }
 
-const FAN_CONTROL_PATH = "Command";
+/**
+ * Status perangkat yang dibaca dari /Status (ditulis oleh Arduino, read-only)
+ */
+export interface DeviceStatus {
+  kipas: FanSpeed; // Status kipas aktual dari device
+  gerak: string; // Arah gerak aktual ("MAJU", "MUNDUR", dll)
+  rpmKanan: number;
+  rpmKiri: number;
+}
+
+// ─── Paths ────────────────────────────────────────────────────────────────────
+
+const UDARA_PATH = "Udara";
+const STATUS_PATH = "Status";
+const COMMAND_PATH = "Command";
+
+// ─── Sensor Data ─────────────────────────────────────────────────────────────
 
 /**
- * Menulis state fan control ke Firebase Realtime Database
- * Path: /Command/{ speed, isAutoMode, updatedAt }
+ * Subscribe ke perubahan data sensor real-time dari /Udara
+ * Struktur Firebase:
+ *   /Udara/{ PM25, PM10, CO, VOC, Suhu, Tegangan, Persentase }
+ */
+export function listenToSensorData(
+  callback: (data: SensorReading) => void,
+  onError?: (error: Error) => void,
+): () => void {
+  const sensorsRef = ref(database, UDARA_PATH);
+
+  const listener = onValue(
+    sensorsRef,
+    (snapshot: DataSnapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        const sensorReading: SensorReading = {
+          pm25: Number(data.PM25) || 0,
+          pm10: Number(data.PM10) || 0,
+          co: Number(data.CO) || 0,
+          voc: Number(data.VOC) || 0,
+          suhu: Number(data.Suhu) || 25,
+          tegangan: Number(data.Tegangan) || 0,
+          battery: Number(data.Persentase) || 0,
+          timestamp: new Date(),
+        };
+        callback(sensorReading);
+      }
+    },
+    (error: Error) => {
+      console.error("Firebase sensor error:", error);
+      if (onError) onError(error);
+    },
+  );
+
+  return () => off(sensorsRef, "value", listener);
+}
+
+// ─── Device Status (read-only, ditulis Arduino) ───────────────────────────────
+
+/**
+ * Subscribe ke /Status — status aktual perangkat dari Arduino
+ * Struktur: /Status/{ kipas, gerak, rpmKanan, rpmKiri }
+ */
+export function listenToDeviceStatus(
+  callback: (status: DeviceStatus) => void,
+  onError?: (error: Error) => void,
+): () => void {
+  const statusRef = ref(database, STATUS_PATH);
+
+  const listener = onValue(
+    statusRef,
+    (snapshot: DataSnapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        callback({
+          kipas: (data.kipas as FanSpeed) || "off",
+          gerak: String(data.gerak || "DIAM"),
+          rpmKanan: Number(data.rpmKanan || 0),
+          rpmKiri: Number(data.rpmKiri || 0),
+        });
+      }
+    },
+    (error: Error) => {
+      console.error("Firebase status error:", error);
+      if (onError) onError(error);
+    },
+  );
+
+  return () => off(statusRef, "value", listener);
+}
+
+// ─── Fan / Command Control ────────────────────────────────────────────────────
+
+/**
+ * Menulis perintah ke /Command
+ * Struktur: /Command/{ speed, gerak, isAutoMode, updatedAt }
+ * - speed  : "OFF" | "LOW" | "NORMAL" | "HIGH"
+ * - gerak  : "MAJU" | "MUNDUR" | "KIRI" | "KANAN" | "DIAM"
  */
 export async function setFanControl(state: FanControlState): Promise<void> {
-  const fanRef = ref(database, FAN_CONTROL_PATH);
+  const fanRef = ref(database, COMMAND_PATH);
   await set(fanRef, {
-    ...state,
+    speed: state.speed.toUpperCase(),
+    gerak: "MAJU", // default gerak; diubah via remote control
+    isAutoMode: state.isAutoMode,
     updatedAt: Date.now(),
   });
 }
 
 /**
- * Membaca state fan control dari Firebase sekali (one-shot)
+ * Menulis perintah gerak ke /Command/gerak
+ */
+export async function setGerakCommand(gerak: string): Promise<void> {
+  const gerakRef = ref(database, `${COMMAND_PATH}/gerak`);
+  await set(gerakRef, gerak.toUpperCase());
+}
+
+/**
+ * Membaca state command dari Firebase sekali (one-shot)
  */
 export async function getFanControl(): Promise<FanControlState | null> {
-  const fanRef = ref(database, FAN_CONTROL_PATH);
+  const fanRef = ref(database, COMMAND_PATH);
   const snapshot = await get(fanRef);
   if (snapshot.exists()) {
     const data = snapshot.val();
     return {
-      speed: (data.speed as FanSpeed) || "off",
+      speed: ((data.speed as string)?.toLowerCase() as FanSpeed) || "off",
       isAutoMode:
         data.isAutoMode !== undefined ? Boolean(data.isAutoMode) : true,
       updatedAt: data.updatedAt,
@@ -43,15 +145,13 @@ export async function getFanControl(): Promise<FanControlState | null> {
 }
 
 /**
- * Subscribe ke perubahan state fan control dari Firebase secara real-time
- * Path: /Command/{ speed, isAutoMode }
- * Mengembalikan fungsi cleanup untuk unsubscribe
+ * Subscribe ke perubahan /Command secara real-time
  */
 export function listenToFanControl(
   callback: (state: FanControlState) => void,
   onError?: (error: Error) => void,
 ): () => void {
-  const fanRef = ref(database, FAN_CONTROL_PATH);
+  const fanRef = ref(database, COMMAND_PATH);
 
   const listener = onValue(
     fanRef,
@@ -59,13 +159,12 @@ export function listenToFanControl(
       const data = snapshot.val();
       if (data) {
         callback({
-          speed: (data.speed as FanSpeed) || "off",
+          speed: ((data.speed as string)?.toLowerCase() as FanSpeed) || "off",
           isAutoMode:
             data.isAutoMode !== undefined ? Boolean(data.isAutoMode) : true,
           updatedAt: data.updatedAt,
         });
       } else {
-        // Node belum ada — kembalikan default
         callback({ speed: "off", isAutoMode: true });
       }
     },
@@ -78,32 +177,22 @@ export function listenToFanControl(
   return () => off(fanRef, "value", listener);
 }
 
-// ─── Filter Status ──────────────────────────────────────────────────────────
+// ─── Filter Status ────────────────────────────────────────────────────────────
 
-/**
- * Menyimpan tanggal penggantian filter baru ke Firebase
- */
 export async function resetFilterStartDate(): Promise<void> {
-  const filterRef = ref(database, "Command/filterStartDate");
+  const filterRef = ref(database, `${COMMAND_PATH}/filterStartDate`);
   await set(filterRef, Date.now());
 }
 
-/**
- * Membaca/Subscribe ke perubahan tanggal filter dari Firebase
- */
 export function listenToFilterStartDate(
   callback: (timestamp: number | null) => void,
 ): () => void {
-  const filterRef = ref(database, "Command/filterStartDate");
+  const filterRef = ref(database, `${COMMAND_PATH}/filterStartDate`);
+
   const listener = onValue(
     filterRef,
     (snapshot: DataSnapshot) => {
-      if (snapshot.exists()) {
-        callback(Number(snapshot.val()));
-      } else {
-        // Belum diset
-        callback(null);
-      }
+      callback(snapshot.exists() ? Number(snapshot.val()) : null);
     },
     (error: Error) => {
       console.error("Firebase filter error:", error);
@@ -113,59 +202,8 @@ export function listenToFilterStartDate(
   return () => off(filterRef, "value", listener);
 }
 
-/**
- * Subscribe to real-time sensor data updates from Firebase
- * Expected database structure: /Udara/{ PM25, PM10, CO, VOC, Suhu }
- * Matches Arduino code field naming (uppercase)
- */
-export function listenToSensorData(
-  callback: (data: SensorReading) => void,
-  onError?: (error: Error) => void,
-) {
-  // Use /Udara path to match Arduino code structure
-  const sensorsRef = ref(database, "Udara");
+// ─── Historical Data ──────────────────────────────────────────────────────────
 
-  const listener = onValue(
-    sensorsRef,
-    (snapshot: DataSnapshot) => {
-      const data = snapshot.val();
-
-      if (data) {
-        // Transform Firebase data to SensorReading format
-        const sensorReading: SensorReading = {
-          pm25: Number(data.PM25) || 0,
-          pm10: Number(data.PM10) || 0,
-          co: Number(data.CO) || 0,
-          voc: Number(data.VOC) || 0,
-          suhu: Number(data.Suhu) || 25, // fallback 25°C jika tidak ada data
-          battery: Number(data.Persentase) || 0,
-          timestamp: new Date(),
-        };
-
-        callback(sensorReading);
-      }
-    },
-    (error: Error) => {
-      console.error("Firebase error:", error);
-      if (onError) {
-        onError(error);
-      }
-    },
-  );
-
-  // Return cleanup function
-  return () => {
-    off(sensorsRef, "value", listener);
-  };
-}
-
-/**
- * Fetch historical sensor data from Firebase
- * Expected structure: /history/[timestamp]/{ pm25, pm10, co, voc }
- *
- * If historical data is not available in Firebase, returns empty array
- * Components should fall back to simulated data in that case
- */
 export async function getHistoricalData(
   days: number,
 ): Promise<HistoricalData[]> {
@@ -176,18 +214,14 @@ export async function getHistoricalData(
       historyRef,
       (snapshot: DataSnapshot) => {
         const data = snapshot.val();
-
         if (!data) {
-          // No historical data available
           resolve([]);
           return;
         }
 
-        const now = Date.now();
-        const cutoffTime = now - days * 24 * 60 * 60 * 1000;
+        const cutoffTime = Date.now() - days * 24 * 60 * 60 * 1000;
         const historicalData: HistoricalData[] = [];
 
-        // Convert Firebase object to array and filter by time range
         Object.entries(data).forEach(([timestamp, values]: [string, any]) => {
           const ts = Number(timestamp);
           if (ts >= cutoffTime) {
@@ -198,23 +232,22 @@ export async function getHistoricalData(
               co: Number(values.co) || 0,
               voc: Number(values.voc) || 0,
               suhu: Number(values.suhu) || 0,
+              tegangan: Number(values.tegangan) || 0,
               battery: Number(values.battery) || 0,
             });
           }
         });
 
-        // Sort by timestamp ascending
         historicalData.sort(
           (a, b) => a.timestamp.getTime() - b.timestamp.getTime(),
         );
-
         resolve(historicalData);
       },
       (error: Error) => {
         console.error("Error fetching historical data:", error);
         resolve([]);
       },
-      { onlyOnce: true }, // Only read once, not a continuous listener
+      { onlyOnce: true },
     );
   });
 }

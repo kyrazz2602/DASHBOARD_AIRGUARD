@@ -1,27 +1,27 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Target, RotateCcw, Power, Keyboard, X } from "lucide-react";
+import { Target, RotateCcw, Keyboard, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useIsMobile } from "@/hooks/use-mobile";
+import { setGerakCommand } from "@/lib/firebase-data";
+
+// ── Color Palette ─────────────────────────────────────────────────────────────
+const C = {
+  bg: "#0B0E14", // deep background
+  bgAlt: "#0D1117", // panel / header
+  fill: "#152238", // button fill
+  fillAct: "#1A2B42", // button fill active
+  neon: "#00F2FF", // primary neon cyan
+  neonAct: "#00D1FF", // neon active
+  stop: "#FF3B30", // emergency stop
+} as const;
 
 interface RemoteControlModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
-const JOYSTICK_RADIUS = 60;
-const KNOB_RADIUS = 24;
-
-// ── CSS 3D Radar (same look as before, just with perspective tilt) ────────────
+// ── CSS 3D Radar ──────────────────────────────────────────────────────────────
 function RadarView({
   posX,
   posY,
@@ -30,6 +30,8 @@ function RadarView({
 }: {
   posX: number;
   posY: number;
+  nx?: number;
+  ny?: number;
   className?: string;
   style?: React.CSSProperties;
 }) {
@@ -38,13 +40,9 @@ function RadarView({
 
   return (
     <div
-      className={cn(
-        "relative overflow-hidden bg-black/40 select-none",
-        className,
-      )}
-      style={{ perspective: "500px", ...style }}
+      className={cn("relative overflow-hidden select-none", className)}
+      style={{ background: C.bg, perspective: "500px", ...style }}
     >
-      {/* 3D tilted plane — same grid/crosshair/dot as before */}
       <div
         className="absolute inset-0"
         style={{
@@ -52,163 +50,192 @@ function RadarView({
           transformOrigin: "50% 55%",
         }}
       >
-        {/* Grid */}
         <div
-          className="absolute inset-0 opacity-20"
+          className="absolute inset-0"
           style={{
-            backgroundImage:
-              "linear-gradient(var(--primary) 1px, transparent 1px), linear-gradient(90deg, var(--primary) 1px, transparent 1px)",
+            opacity: 0.18,
+            backgroundImage: `linear-gradient(${C.neon} 1px, transparent 1px), linear-gradient(90deg, ${C.neon} 1px, transparent 1px)`,
             backgroundSize: "40px 40px",
             backgroundPosition: "center",
           }}
         />
-
-        {/* Crosshair */}
-        <div className="absolute w-full h-[1px] top-1/2 bg-primary/30" />
-        <div className="absolute h-full w-[1px] left-1/2 bg-primary/30" />
-
-        {/* Moving dot */}
         <div
-          className="absolute w-4 h-4 bg-primary rounded-full border-2 border-white shadow-[0_0_15px_var(--primary)] z-10 transition-all duration-300 ease-out"
+          className="absolute w-full h-[1px] top-1/2"
+          style={{ background: `${C.neon}33` }}
+        />
+        <div
+          className="absolute h-full w-[1px] left-1/2"
+          style={{ background: `${C.neon}33` }}
+        />
+
+        <div
+          className="absolute w-4 h-4 rounded-full border-2 border-white z-10 transition-all duration-300 ease-out"
           style={{
             left: `${dotX}%`,
             top: `${dotY}%`,
             transform: "translate(-50%, -50%)",
+            background: C.neon,
+            boxShadow: `0 0 14px ${C.neon}, 0 0 28px ${C.neon}88`,
           }}
         >
-          <div className="absolute inset-0 rounded-full animate-ping bg-primary opacity-50" />
+          <div
+            className="absolute inset-0 rounded-full animate-ping opacity-50"
+            style={{ background: C.neon }}
+          />
         </div>
       </div>
 
-      {/* Coordinates — flat overlay, not inside the 3D plane */}
-      <div className="absolute bottom-2 right-3 z-20 font-mono text-[10px] text-primary/80">
-        X: {posX} | Y: {posY * -1}
+      <div
+        className="absolute bottom-2 left-1/2 -translate-x-1/2 z-20 font-mono text-[10px] whitespace-nowrap"
+        style={{ color: `${C.neon}99` }}
+      >
+        X: {(posX * -0.782655510043378).toFixed(12)} | Y:{" "}
+        {(posY * -0.0573081694326074).toFixed(12)} | Z: 12.345678901235
       </div>
     </div>
   );
 }
 
-// ── Joystick ─────────────────────────────────────────────────────────────────
-function Joystick({
+// ── D-Pad ─────────────────────────────────────────────────────────────────────
+// Only 4 arc buttons (N/E/S/W) — no side paddles, no center circle
+function DPad({
   onMove,
-  onRelease,
-  size = "lg",
+  activeDir,
 }: {
-  onMove: (nx: number, ny: number) => void;
-  onRelease: () => void;
-  size?: "sm" | "lg";
+  onMove: (dir: "up" | "down" | "left" | "right") => void;
+  activeDir: string | null;
 }) {
-  const radius = size === "lg" ? JOYSTICK_RADIUS : 48;
-  const knob = size === "lg" ? KNOB_RADIUS : 20;
-  const total = radius * 2 + knob * 2;
+  const SIZE = 200;
+  const cx = SIZE / 2;
+  const cy = SIZE / 2;
+  const outerR = 90;
+  const innerR = 54;
+  const GAP = 8; // degrees gap between segments
 
-  const [offset, setOffset] = useState({ x: 0, y: 0 });
-  const [active, setActive] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const isAct = (d: string) => activeDir === d;
 
-  const getCenter = () => {
-    if (!ref.current) return { x: 0, y: 0 };
-    const r = ref.current.getBoundingClientRect();
-    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  // polar → cartesian (0° = top, clockwise)
+  const pt = (r: number, deg: number) => ({
+    x: cx + r * Math.sin((deg * Math.PI) / 180),
+    y: cy - r * Math.cos((deg * Math.PI) / 180),
+  });
+
+  // Annular arc (donut slice) path
+  const arcPath = (r1: number, r2: number, a1: number, a2: number) => {
+    const A = pt(r1, a1),
+      B = pt(r1, a2);
+    const Cv = pt(r2, a2),
+      D = pt(r2, a1);
+    const lg = a2 - a1 > 180 ? 1 : 0;
+    return [
+      `M ${A.x} ${A.y}`,
+      `A ${r1} ${r1} 0 ${lg} 1 ${B.x} ${B.y}`,
+      `L ${Cv.x} ${Cv.y}`,
+      `A ${r2} ${r2} 0 ${lg} 0 ${D.x} ${D.y}`,
+      "Z",
+    ].join(" ");
   };
 
-  const updateKnob = (
-    cx: number,
-    cy: number,
-    center: { x: number; y: number },
+  // Small filled triangle pointing in the direction
+  const triPath = (
+    dir: "up" | "down" | "left" | "right",
+    x: number,
+    y: number,
+    s: number,
   ) => {
-    const dx = cx - center.x;
-    const dy = cy - center.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    const clamped = Math.min(dist, radius);
-    const angle = Math.atan2(dy, dx);
-    const ox = Math.cos(angle) * clamped;
-    const oy = Math.sin(angle) * clamped;
-    setOffset({ x: ox, y: oy });
-    onMove(ox / radius, oy / radius);
+    switch (dir) {
+      case "up":
+        return `M ${x} ${y - s} L ${x + s * 0.8} ${y + s * 0.5} L ${x - s * 0.8} ${y + s * 0.5} Z`;
+      case "down":
+        return `M ${x} ${y + s} L ${x + s * 0.8} ${y - s * 0.5} L ${x - s * 0.8} ${y - s * 0.5} Z`;
+      case "left":
+        return `M ${x - s} ${y} L ${x + s * 0.5} ${y - s * 0.8} L ${x + s * 0.5} ${y + s * 0.8} Z`;
+      case "right":
+        return `M ${x + s} ${y} L ${x - s * 0.5} ${y - s * 0.8} L ${x - s * 0.5} ${y + s * 0.8} Z`;
+    }
   };
 
-  const handlePointerDown = (e: React.PointerEvent) => {
-    e.currentTarget.setPointerCapture(e.pointerId);
-    setActive(true);
-    updateKnob(e.clientX, e.clientY, getCenter());
-  };
-
-  const handlePointerMove = (e: React.PointerEvent) => {
-    if (!active) return;
-    updateKnob(e.clientX, e.clientY, getCenter());
-  };
-
-  const handlePointerUp = () => {
-    setActive(false);
-    setOffset({ x: 0, y: 0 });
-    onRelease();
-  };
+  const dirArcs: { dir: "up" | "down" | "left" | "right"; mid: number }[] = [
+    { dir: "up", mid: 0 },
+    { dir: "right", mid: 90 },
+    { dir: "down", mid: 180 },
+    { dir: "left", mid: 270 },
+  ];
 
   return (
     <div
-      ref={ref}
-      className="relative rounded-full select-none touch-none cursor-grab active:cursor-grabbing"
-      style={{
-        width: total,
-        height: total,
-        background: "radial-gradient(circle at 40% 35%, #1e293b, #0f172a)",
-        boxShadow: active
-          ? "0 0 0 2px var(--primary), inset 0 2px 8px rgba(0,0,0,0.6), 0 0 20px color-mix(in srgb, var(--primary) 30%, transparent)"
-          : "0 0 0 1px #334155, inset 0 2px 8px rgba(0,0,0,0.6)",
-        transition: "box-shadow 0.15s",
-      }}
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-      onPointerCancel={handlePointerUp}
+      className="relative select-none touch-none"
+      style={{ width: SIZE, height: SIZE }}
     >
-      {/* Direction ticks */}
-      {[0, 90, 180, 270].map((deg) => (
-        <div
-          key={deg}
-          className="absolute rounded-full bg-primary/30"
-          style={{
-            width: 6,
-            height: 6,
-            left: "50%",
-            top: "50%",
-            transform: `translate(-50%, -50%) rotate(${deg}deg) translateY(-${radius + 2}px)`,
-          }}
-        />
-      ))}
-
-      {/* Knob */}
-      <div
-        className="absolute rounded-full"
-        style={{
-          width: knob * 2,
-          height: knob * 2,
-          left: "50%",
-          top: "50%",
-          transform: `translate(calc(-50% + ${offset.x}px), calc(-50% + ${offset.y}px))`,
-          transition: active
-            ? "none"
-            : "transform 0.25s cubic-bezier(0.34,1.56,0.64,1)",
-          background: active
-            ? "radial-gradient(circle at 35% 30%, #60a5fa, #1d4ed8)"
-            : "radial-gradient(circle at 35% 30%, #475569, #1e293b)",
-          boxShadow: active
-            ? "0 0 16px rgba(59,130,246,0.8), 0 4px 12px rgba(0,0,0,0.5)"
-            : "0 4px 12px rgba(0,0,0,0.5)",
-        }}
+      <svg
+        width={SIZE}
+        height={SIZE}
+        viewBox={`0 0 ${SIZE} ${SIZE}`}
+        xmlns="http://www.w3.org/2000/svg"
+        style={{ overflow: "visible" }}
       >
-        <div
-          className="absolute rounded-full"
-          style={{
-            width: "40%",
-            height: "40%",
-            top: "15%",
-            left: "20%",
-            background: "rgba(255,255,255,0.15)",
-          }}
+        <defs>
+          <filter id="glow-idle" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="2.5" result="b" />
+            <feMerge>
+              <feMergeNode in="b" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+          <filter id="glow-on" x="-80%" y="-80%" width="260%" height="260%">
+            <feGaussianBlur stdDeviation="6" result="b" />
+            <feMerge>
+              <feMergeNode in="b" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+          <radialGradient id="arc-fill" cx="50%" cy="30%" r="70%">
+            <stop offset="0%" stopColor={C.fillAct} />
+            <stop offset="100%" stopColor={C.fill} />
+          </radialGradient>
+        </defs>
+
+        {/* Outer decorative ring */}
+        <circle
+          cx={cx}
+          cy={cy}
+          r={outerR + 1}
+          fill="none"
+          stroke={C.neon}
+          strokeWidth="1"
+          opacity="0.2"
+          filter="url(#glow-idle)"
         />
-      </div>
+
+        {/* 4 directional arc buttons */}
+        {dirArcs.map(({ dir, mid }) => {
+          const act = isAct(dir);
+          const a1 = mid - 50 + GAP;
+          const a2 = mid + 50 - GAP;
+          const lp = pt((innerR + outerR) / 2, mid);
+          const stroke = act ? C.neonAct : C.neon;
+          return (
+            <g
+              key={dir}
+              onClick={() => onMove(dir)}
+              style={{ cursor: "pointer" }}
+              filter={act ? "url(#glow-on)" : "url(#glow-idle)"}
+            >
+              <path
+                d={arcPath(innerR, outerR, a1, a2)}
+                fill={act ? C.fillAct : "url(#arc-fill)"}
+                stroke={stroke}
+                strokeWidth={act ? "2.4" : "2"}
+              />
+              <path
+                d={triPath(dir, lp.x, lp.y, 5)}
+                fill={stroke}
+                style={{ pointerEvents: "none" }}
+              />
+            </g>
+          );
+        })}
+      </svg>
     </div>
   );
 }
@@ -218,67 +245,82 @@ export function RemoteControlModal({
   isOpen,
   onClose,
 }: RemoteControlModalProps) {
-  const isMobile = useIsMobile();
-
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [activeDir, setActiveDir] = useState<string | null>(null);
-  const moveRef = useRef<{ nx: number; ny: number } | null>(null);
-  const rafRef = useRef<number | null>(null);
+  const [joystickVec, setJoystickVec] = useState({ nx: 0, ny: 0 });
+  const [isSyncing, setIsSyncing] = useState(false);
 
   const clamp = (v: number) => Math.max(-100, Math.min(100, v));
 
-  // Continuous movement loop
-  useEffect(() => {
-    const loop = () => {
-      if (moveRef.current) {
-        const { nx, ny } = moveRef.current;
-        if (Math.abs(nx) > 0.05 || Math.abs(ny) > 0.05) {
-          setPosition((p) => ({
-            x: clamp(p.x + nx * 2.5),
-            y: clamp(p.y + ny * 2.5),
-          }));
-        }
-      }
-      rafRef.current = requestAnimationFrame(loop);
-    };
-    rafRef.current = requestAnimationFrame(loop);
-    return () => {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
-    };
-  }, []);
-
-  const handleJoystickMove = useCallback((nx: number, ny: number) => {
-    moveRef.current = { nx, ny };
-  }, []);
-  const handleJoystickRelease = useCallback(() => {
-    moveRef.current = null;
-  }, []);
-
-  const handleReset = () => {
-    setPosition({ x: 0, y: 0 });
-    moveRef.current = null;
-    setActiveDir("reset");
-    setTimeout(() => setActiveDir(null), 200);
+  // Map D-Pad direction → Firebase gerak command
+  const GERAK_MAP: Record<"up" | "down" | "left" | "right", string> = {
+    up: "MAJU",
+    down: "MUNDUR",
+    left: "KIRI",
+    right: "KANAN",
   };
 
-  // Keyboard
-  const move = useCallback((dir: "up" | "down" | "left" | "right") => {
-    setActiveDir(dir);
-    setTimeout(() => setActiveDir(null), 150);
-    const STEP = 15;
-    setPosition((p) => {
-      switch (dir) {
-        case "up":
-          return { ...p, y: clamp(p.y - STEP) };
-        case "down":
-          return { ...p, y: clamp(p.y + STEP) };
-        case "left":
-          return { ...p, x: clamp(p.x - STEP) };
-        case "right":
-          return { ...p, x: clamp(p.x + STEP) };
+  // Debounce ref — kirim ke Firebase max 1x per 200ms
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const sendGerak = useCallback((gerak: string) => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(async () => {
+      try {
+        setIsSyncing(true);
+        await setGerakCommand(gerak);
+      } catch (err) {
+        console.error("[RemoteControl] Failed to send gerak:", err);
+      } finally {
+        setIsSyncing(false);
       }
-    });
+    }, 80);
   }, []);
+
+  const move = useCallback(
+    (dir: "up" | "down" | "left" | "right") => {
+      setActiveDir(dir);
+      const vecMap = {
+        up: { nx: 0, ny: -1 },
+        down: { nx: 0, ny: 1 },
+        left: { nx: -1, ny: 0 },
+        right: { nx: 1, ny: 0 },
+      };
+      setJoystickVec(vecMap[dir]);
+      setTimeout(() => {
+        setActiveDir(null);
+        setJoystickVec({ nx: 0, ny: 0 });
+      }, 150);
+
+      // Update radar dot
+      const STEP = 15;
+      setPosition((prev) => {
+        switch (dir) {
+          case "up":
+            return { ...prev, y: clamp(prev.y - STEP) };
+          case "down":
+            return { ...prev, y: clamp(prev.y + STEP) };
+          case "left":
+            return { ...prev, x: clamp(prev.x - STEP) };
+          case "right":
+            return { ...prev, x: clamp(prev.x + STEP) };
+        }
+      });
+
+      // Send to Firebase
+      sendGerak(GERAK_MAP[dir]);
+    },
+    [sendGerak],
+  );
+
+  const handleReset = useCallback(() => {
+    setPosition({ x: 0, y: 0 });
+    setJoystickVec({ nx: 0, ny: 0 });
+    setActiveDir("reset");
+    setTimeout(() => setActiveDir(null), 200);
+    // Stop movement
+    sendGerak("DIAM");
+  }, [sendGerak]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -316,146 +358,137 @@ export function RemoteControlModal({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [isOpen, move, onClose]);
+  }, [isOpen, move, onClose, handleReset]);
 
-  // ── MOBILE: fullscreen ────────────────────────────────────────────────────
-  if (isMobile) {
-    if (!isOpen) return null;
-    return (
-      <div className="fixed inset-0 z-50 bg-background flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-card/80 backdrop-blur-md shrink-0">
-          <div className="flex items-center gap-2">
-            <Target className="w-4 h-4 text-primary" />
-            <span className="font-bold tracking-wider text-primary text-sm uppercase">
-              Remote Control
-            </span>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+  if (!isOpen) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex flex-col"
+      style={{ background: C.bg }}
+    >
+      {/* Header */}
+      <div
+        className="flex items-center justify-between px-4 py-3 shrink-0 backdrop-blur-md"
+        style={{
+          background: `${C.bgAlt}ee`,
+          borderBottom: `1px solid ${C.neon}22`,
+        }}
+      >
+        <div className="flex items-center gap-2">
+          <Target className="w-4 h-4" style={{ color: C.neon }} />
+          <span
+            className="font-bold tracking-wider text-sm uppercase"
+            style={{ color: C.neon }}
           >
-            <X className="w-5 h-5" />
-          </button>
+            Remote Control
+          </span>
+          {isSyncing && (
+            <span
+              className="w-1.5 h-1.5 rounded-full animate-pulse"
+              style={{ background: C.neon }}
+            />
+          )}
         </div>
+        <button
+          onClick={onClose}
+          className="p-1.5 rounded-lg transition-colors"
+          style={{ color: `${C.neon}88` }}
+          onMouseEnter={(e) => (e.currentTarget.style.color = C.neon)}
+          onMouseLeave={(e) => (e.currentTarget.style.color = `${C.neon}88`)}
+        >
+          <X className="w-5 h-5" />
+        </button>
+      </div>
 
-        {/* 3D Radar — fills remaining space */}
+      {/* Body */}
+      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
+        {/* Radar */}
         <RadarView
           posX={position.x}
           posY={position.y}
-          className="flex-1 w-full"
+          nx={joystickVec.nx}
+          ny={joystickVec.ny}
+          className="flex-1 w-full min-h-[40vh] lg:min-h-0"
         />
 
-        {/* Controls */}
-        <div className="bg-card border-t border-border px-5 py-5 flex flex-col items-center gap-4 shrink-0">
-          <p className="text-[11px] text-muted-foreground uppercase tracking-widest">
+        {/* Controls panel */}
+        <div
+          className="px-5 py-5 flex flex-col items-center justify-center gap-6 shrink-0 lg:w-72 lg:py-8"
+          style={{ background: C.bgAlt, borderTop: `1px solid ${C.neon}18` }}
+        >
+          <p
+            className="text-[11px] uppercase tracking-widest"
+            style={{ color: `${C.neon}66` }}
+          >
             Drag to navigate
           </p>
-          <Joystick
-            onMove={handleJoystickMove}
-            onRelease={handleJoystickRelease}
-            size="lg"
-          />
-          <div className="flex w-full gap-3">
-            <Button
-              variant="outline"
-              className="flex-1 h-10 gap-2"
+
+          <DPad onMove={move} activeDir={activeDir} />
+
+          {/* STOP & RESET */}
+          <div className="flex flex-col w-full gap-3">
+            <button
+              className="w-full h-11 flex items-center justify-center gap-2 rounded-md text-sm font-bold tracking-wider uppercase transition-all"
+              style={{
+                background: C.stop,
+                color: "#fff",
+                boxShadow: `0 0 16px ${C.stop}66`,
+                border: `1px solid ${C.stop}`,
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.boxShadow =
+                  `0 0 28px ${C.stop}99`;
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.boxShadow =
+                  `0 0 16px ${C.stop}66`;
+              }}
+              onClick={() => {
+                handleReset();
+                onClose();
+              }}
+            >
+              <span className="w-2 h-2 rounded-full bg-white inline-block" />
+              Stop
+            </button>
+
+            <button
+              className="w-full h-11 flex items-center justify-center gap-2 rounded-md text-sm font-medium transition-all"
+              style={{
+                background: "transparent",
+                color: `${C.neon}cc`,
+                border: `1px solid ${C.neon}44`,
+              }}
+              onMouseEnter={(e) => {
+                const el = e.currentTarget as HTMLButtonElement;
+                el.style.background = C.fill;
+                el.style.borderColor = `${C.neon}99`;
+                el.style.color = C.neon;
+              }}
+              onMouseLeave={(e) => {
+                const el = e.currentTarget as HTMLButtonElement;
+                el.style.background = "transparent";
+                el.style.borderColor = `${C.neon}44`;
+                el.style.color = `${C.neon}cc`;
+              }}
               onClick={handleReset}
             >
               <RotateCcw className="w-4 h-4" />
               Reset
-            </Button>
-            <Button
-              variant="destructive"
-              className="flex-1 h-10 gap-2 shadow-[0_0_12px_rgba(220,38,38,0.4)]"
-              onClick={() => {
-                handleReset();
-                onClose();
-              }}
-            >
-              <Power className="w-4 h-4" />
-              Stop
-            </Button>
+            </button>
+          </div>
+
+          {/* Keyboard hint */}
+          <div
+            className="flex items-center gap-2 text-[10px]"
+            style={{ color: `${C.neon}33` }}
+          >
+            <Keyboard className="w-3 h-3" />
+            <span>Arrow Keys / WASD supported</span>
           </div>
         </div>
       </div>
-    );
-  }
-
-  // ── DESKTOP: dialog (original layout) ────────────────────────────────────
-  return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-sm bg-background/80 backdrop-blur-xl border-primary/20 shadow-2xl">
-        <DialogHeader className="text-center pb-2">
-          <DialogTitle className="text-xl font-bold tracking-wider text-primary flex items-center justify-center gap-2">
-            <Target className="w-5 h-5" /> REMOTE CONTROL
-          </DialogTitle>
-          <DialogDescription className="text-xs text-muted-foreground">
-            Drag joystick or use Arrow Keys / WASD
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="flex flex-col items-center space-y-6">
-          {/* 3D Radar */}
-          <RadarView
-            posX={position.x}
-            posY={position.y}
-            className="w-full rounded-xl overflow-hidden border border-primary/20"
-            style={{ aspectRatio: "16/9" }}
-          />
-
-          {/* Joystick */}
-          <div className="relative p-4 rounded-full bg-secondary/30 border border-white/5 shadow-xl">
-            <Joystick
-              onMove={handleJoystickMove}
-              onRelease={handleJoystickRelease}
-              size="sm"
-            />
-          </div>
-
-          {/* Reset button */}
-          <button
-            onClick={handleReset}
-            className={cn(
-              "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all border",
-              "border-border hover:border-primary/40 hover:bg-primary/10",
-              activeDir === "reset"
-                ? "text-primary border-primary/40 bg-primary/10"
-                : "text-muted-foreground",
-            )}
-          >
-            <RotateCcw className="w-3 h-3" />
-            Reset Position
-          </button>
-
-          {/* Footer */}
-          <div className="flex w-full gap-3 pt-2">
-            <Button
-              variant="outline"
-              className="flex-1 gap-2 border-primary/20 hover:bg-primary/10"
-              onClick={onClose}
-            >
-              Close
-            </Button>
-            <Button
-              variant="destructive"
-              className="flex-1 gap-2 shadow-[0_0_10px_rgba(220,38,38,0.3)]"
-              onClick={() => {
-                handleReset();
-                onClose();
-              }}
-            >
-              <Power className="w-4 h-4" />
-              Emergency Stop
-            </Button>
-          </div>
-
-          <div className="flex items-center gap-2 text-[10px] text-muted-foreground/60">
-            <Keyboard className="w-3 h-3" />
-            <span>Supports Arrow Keys & WASD</span>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
+    </div>
   );
 }

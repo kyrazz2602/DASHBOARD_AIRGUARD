@@ -13,26 +13,26 @@ interface SensorCardProps {
 
 const STATUS_STYLES = {
   Safe: {
-    dot: "bg-emerald-600 dark:bg-emerald-400",
+    dot: "bg-emerald-500 dark:bg-emerald-400",
     text: "text-emerald-700 dark:text-emerald-300",
     value: "text-emerald-700 dark:text-emerald-300",
-    glow: "hover:shadow-emerald-500/20 hover:border-emerald-400/60",
+    glow: "hover:shadow-emerald-500/15 hover:border-emerald-400/50",
     iconBg: "group-hover:bg-emerald-100 dark:group-hover:bg-emerald-900/30",
     iconColor: "group-hover:text-emerald-600 dark:group-hover:text-emerald-400",
   },
   Warning: {
-    dot: "bg-amber-600 dark:bg-amber-400",
+    dot: "bg-amber-500 dark:bg-amber-400",
     text: "text-amber-700 dark:text-amber-300",
     value: "text-amber-700 dark:text-amber-300",
-    glow: "hover:shadow-amber-500/20 hover:border-amber-400/60",
+    glow: "hover:shadow-amber-500/15 hover:border-amber-400/50",
     iconBg: "group-hover:bg-amber-100 dark:group-hover:bg-amber-900/30",
     iconColor: "group-hover:text-amber-600 dark:group-hover:text-amber-400",
   },
   Danger: {
-    dot: "bg-red-600 dark:bg-red-400",
+    dot: "bg-red-500 dark:bg-red-400",
     text: "text-red-700 dark:text-red-300",
     value: "text-red-700 dark:text-red-300",
-    glow: "hover:shadow-red-500/20 hover:border-red-400/60",
+    glow: "hover:shadow-red-500/15 hover:border-red-400/50",
     iconBg: "group-hover:bg-red-100 dark:group-hover:bg-red-900/30",
     iconColor: "group-hover:text-red-600 dark:group-hover:text-red-400",
   },
@@ -58,29 +58,24 @@ export function SensorCard({
   return (
     <Card
       className={cn(
-        // Base
         "group relative overflow-hidden p-4 sm:p-5 bg-card border border-border cursor-default select-none",
-        // Transition — semua properti sekaligus
         "transition-all duration-300 ease-out",
-        // Hover: angkat + shadow berwarna sesuai status
-        "hover:-translate-y-1.5 hover:shadow-xl",
+        "hover:-translate-y-1 hover:shadow-lg",
         styles.glow,
         className,
       )}
     >
-      {/* Shimmer sweep on hover */}
-      <div className="pointer-events-none absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-in-out bg-gradient-to-r from-transparent via-black/[0.06] to-transparent dark:via-white/10" />
+      {/* Shimmer sweep */}
+      <div className="pointer-events-none absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-in-out bg-gradient-to-r from-transparent via-black/[0.05] to-transparent dark:via-white/[0.07]" />
 
       {/* Top row: label + icon */}
       <div className="flex items-center justify-between mb-3">
-        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider transition-colors duration-300 group-hover:text-foreground">
+        <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider transition-colors duration-300 group-hover:text-foreground">
           {label}
         </span>
-        {/* Icon container — scale + color on hover */}
         <div
           className={cn(
-            "p-1.5 rounded-lg transition-all duration-300",
-            "text-muted-foreground/60",
+            "p-1.5 rounded-lg transition-all duration-300 text-muted-foreground/60",
             styles.iconBg,
             styles.iconColor,
             "group-hover:scale-110",
@@ -90,8 +85,8 @@ export function SensorCard({
         </div>
       </div>
 
-      {/* Value — scale up slightly on hover */}
-      <div className="mb-3 transition-transform duration-300 group-hover:scale-[1.03] origin-left">
+      {/* Value */}
+      <div className="mb-3 transition-transform duration-300 group-hover:scale-[1.02] origin-left">
         <span
           className={cn(
             "text-2xl sm:text-3xl font-bold tabular-nums leading-none",
@@ -107,11 +102,9 @@ export function SensorCard({
 
       {/* Status dot + label */}
       <div className="flex items-center gap-1.5">
-        {/* Dot pulses on hover */}
         <span
           className={cn(
-            "w-1.5 h-1.5 rounded-full shrink-0 transition-all duration-300",
-            "group-hover:scale-125 group-hover:shadow-sm",
+            "w-1.5 h-1.5 rounded-full shrink-0 transition-all duration-300 group-hover:scale-125",
             styles.dot,
           )}
         />
