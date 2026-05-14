@@ -479,8 +479,7 @@ export default function HomePage() {
               </span>
             </h2>
             <p className="text-muted-foreground max-w-2xl mx-auto text-lg leading-relaxed">
-              Empat parameter kunci kualitas udara dipantau secara simultan
-              berdasarkan standar WHO.
+              Empat parameter kunci kualitas udara dipantau secara Realtime
             </p>
           </div>
 
@@ -491,7 +490,7 @@ export default function HomePage() {
               unit="μg/m³"
               desc="Partikel Halus"
               detail="Partikel berdiameter ≤2.5 mikron yang dapat menembus paru-paru dan masuk ke aliran darah."
-              limit="≤ 5"
+              limit="≤ 35"
               safeValue={5}
               exampleValue={12}
               color="text-blue-500"
@@ -507,7 +506,7 @@ export default function HomePage() {
               unit="μg/m³"
               desc="Partikel Debu"
               detail="Partikel berdiameter ≤10 mikron yang dapat terhirup dan mengiritasi saluran pernapasan."
-              limit="≤ 15"
+              limit="≤ 154"
               safeValue={15}
               exampleValue={28}
               color="text-cyan-500"
@@ -523,7 +522,7 @@ export default function HomePage() {
               unit="ppm"
               desc="Karbon Monoksida"
               detail="Gas tidak berwarna dan tidak berbau yang sangat berbahaya, menghambat pengikatan oksigen dalam darah."
-              limit="≤ 7"
+              limit="≤ 15"
               safeValue={7}
               exampleValue={3}
               color="text-red-500"
@@ -551,13 +550,6 @@ export default function HomePage() {
               sources={["Cat", "Furnitur", "Pembersih"]}
             />
           </div>
-
-          {/* WHO note */}
-          <p className="text-center text-xs text-muted-foreground mt-8 flex items-center justify-center gap-1.5">
-            <span className="inline-block w-4 h-px bg-border" />
-            Batas aman berdasarkan panduan kualitas udara WHO 2021
-            <span className="inline-block w-4 h-px bg-border" />
-          </p>
         </div>
       </section>
 
