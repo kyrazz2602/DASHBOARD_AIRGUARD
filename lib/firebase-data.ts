@@ -1,43 +1,58 @@
-import { database, ref, onValue, off, set, get } from "./firebase";
+import { database, ref, onValue, off, set, get, update } from "./firebase";
 import { SensorReading, HistoricalData, FanSpeed } from "./sensor-data";
 import type { DataSnapshot } from "firebase/database";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ============================================================================
+// 1. TYPE DEFINITIONS & INTERFACES
+// ============================================================================
 
+/**
+ * State untuk kontrol kipas dan mode navigasi yang dikirim ke robot
+ */
 export interface FanControlState {
-  speed: FanSpeed;
-  isAutoMode: boolean;
-  updatedAt?: number;
+  speed: FanSpeed;      // Kecepatan kipas: "off" | "low" | "normal" | "high"
+  isAutoMode: boolean;   // Mode navigasi otomatis (true) atau manual (false)
+  updatedAt?: number;    // Timestamp pembaruan terakhir (ms)
 }
 
 /**
- * Status perangkat yang dibaca dari /Status (ditulis oleh Arduino, read-only)
+ * Status aktual robot yang dikirim balik oleh Arduino (Read-Only dari aplikasi)
  */
 export interface DeviceStatus {
-  kipas: FanSpeed; // Status kipas aktual dari device
-  gerak: string; // Arah gerak aktual ("MAJU", "MUNDUR", dll)
-  rpmKanan: number;
-  rpmKiri: number;
+  kipas: FanSpeed;      // Status kecepatan kipas aktual
+  gerak: string;        // Arah gerak aktual ("MAJU", "MUNDUR", "KIRI", "KANAN", "DIAM")
+  rpmKanan: number;     // Kecepatan putaran roda kanan (RPM)
+  rpmKiri: number;      // Kecepatan putaran roda kiri (RPM)
 }
 
+/**
+ * Data sensor jarak LiDAR terupdate
+ */
 export interface LidarData {
-  timestamp: string;
-  jarak_terdekat_cm: number;
+  timestamp: string;          // Timestamp ISO dari pembacaan LiDAR
+  jarak_terdekat_cm: number;  // Jarak hambatan terdekat dalam centimeter
 }
 
-// ─── Paths ────────────────────────────────────────────────────────────────────
+// ============================================================================
+// 2. DATABASE PATHS
+// ============================================================================
 
 const UDARA_PATH = "Udara";
 const STATUS_PATH = "Status";
 const COMMAND_PATH = "Command";
 const LIDAR_PATH = "LiDAR/latest";
+const HISTORY_PATH = "history";
 
-// ─── Sensor Data ─────────────────────────────────────────────────────────────
+// ============================================================================
+// 3. REAL-TIME DATA SUBSCRIBERS (LISTENERS)
+// ============================================================================
 
 /**
- * Subscribe ke perubahan data sensor real-time dari /Udara
- * Struktur Firebase:
- *   /Udara/{ PM25, PM10, CO, VOC, Suhu, Tegangan, Persentase }
+ * Mendengarkan perubahan data sensor kualitas udara secara real-time dari /Udara
+ * 
+ * @param callback Fungsi handler ketika data baru diterima
+ * @param onError Fungsi handler opsional ketika terjadi error
+ * @returns Fungsi unsubscribe untuk membersihkan listener
  */
 export function listenToSensorData(
   callback: (data: SensorReading) => void,
@@ -64,7 +79,7 @@ export function listenToSensorData(
       }
     },
     (error: Error) => {
-      console.error("Firebase sensor error:", error);
+      console.error("[listenToSensorData] Firebase error:", error);
       if (onError) onError(error);
     },
   );
@@ -72,11 +87,12 @@ export function listenToSensorData(
   return () => off(sensorsRef, "value", listener);
 }
 
-// ─── Device Status (read-only, ditulis Arduino) ───────────────────────────────
-
 /**
- * Subscribe ke /Status — status aktual perangkat dari Arduino
- * Struktur: /Status/{ kipas, gerak, rpmKanan, rpmKiri }
+ * Mendengarkan status riil robot dari /Status (ditulis oleh Arduino)
+ * 
+ * @param callback Fungsi handler ketika data status baru diterima
+ * @param onError Fungsi handler opsional ketika terjadi error
+ * @returns Fungsi unsubscribe untuk membersihkan listener
  */
 export function listenToDeviceStatus(
   callback: (status: DeviceStatus) => void,
@@ -98,7 +114,7 @@ export function listenToDeviceStatus(
       }
     },
     (error: Error) => {
-      console.error("Firebase status error:", error);
+      console.error("[listenToDeviceStatus] Firebase error:", error);
       if (onError) onError(error);
     },
   );
@@ -106,62 +122,12 @@ export function listenToDeviceStatus(
   return () => off(statusRef, "value", listener);
 }
 
-// ─── Fan / Command Control ────────────────────────────────────────────────────
-
 /**
- * Menulis perintah ke /Command
- * Struktur: /Command/{ speed, gerak, isAutoMode, updatedAt }
- * - speed  : "OFF" | "LOW" | "NORMAL" | "HIGH"
- * - gerak  : "MAJU" | "MUNDUR" | "KIRI" | "KANAN" | "DIAM"
- */
-export async function setFanControl(state: FanControlState): Promise<void> {
-  const fanRef = ref(database, COMMAND_PATH);
-  await set(fanRef, {
-    speed: state.speed.toUpperCase(),
-    gerak: "MAJU", // default gerak; diubah via remote control
-    isAutoMode: state.isAutoMode,
-    updatedAt: Date.now(),
-  });
-}
-
-/**
- * Menulis perintah gerak ke /Command/gerak
- */
-export async function setGerakCommand(gerak: string): Promise<void> {
-  const gerakRef = ref(database, `${COMMAND_PATH}/gerak`);
-  await set(gerakRef, gerak.toUpperCase());
-}
-
-/**
- * Mengirim koordinat target navigasi otonom (A* Path Planning) ke /Command
- */
-export async function sendNavGoal(x: number, y: number): Promise<void> {
-  const goalXRef = ref(database, `${COMMAND_PATH}/goal_x`);
-  const goalYRef = ref(database, `${COMMAND_PATH}/goal_y`);
-  await set(goalXRef, x);
-  await set(goalYRef, y);
-}
-
-/**
- * Membaca state command dari Firebase sekali (one-shot)
- */
-export async function getFanControl(): Promise<FanControlState | null> {
-  const fanRef = ref(database, COMMAND_PATH);
-  const snapshot = await get(fanRef);
-  if (snapshot.exists()) {
-    const data = snapshot.val();
-    return {
-      speed: ((data.speed as string)?.toLowerCase() as FanSpeed) || "off",
-      isAutoMode:
-        data.isAutoMode !== undefined ? Boolean(data.isAutoMode) : true,
-      updatedAt: data.updatedAt,
-    };
-  }
-  return null;
-}
-
-/**
- * Subscribe ke perubahan /Command secara real-time
+ * Mendengarkan perubahan konfigurasi kontrol kipas secara real-time dari /Command
+ * 
+ * @param callback Fungsi handler ketika konfigurasi berubah
+ * @param onError Fungsi handler opsional ketika terjadi error
+ * @returns Fungsi unsubscribe untuk membersihkan listener
  */
 export function listenToFanControl(
   callback: (state: FanControlState) => void,
@@ -176,8 +142,7 @@ export function listenToFanControl(
       if (data) {
         callback({
           speed: ((data.speed as string)?.toLowerCase() as FanSpeed) || "off",
-          isAutoMode:
-            data.isAutoMode !== undefined ? Boolean(data.isAutoMode) : true,
+          isAutoMode: data.isAutoMode !== undefined ? Boolean(data.isAutoMode) : true,
           updatedAt: data.updatedAt,
         });
       } else {
@@ -185,7 +150,7 @@ export function listenToFanControl(
       }
     },
     (error: Error) => {
-      console.error("Firebase fan control error:", error);
+      console.error("[listenToFanControl] Firebase error:", error);
       if (onError) onError(error);
     },
   );
@@ -193,13 +158,12 @@ export function listenToFanControl(
   return () => off(fanRef, "value", listener);
 }
 
-// ─── Filter Status ────────────────────────────────────────────────────────────
-
-export async function resetFilterStartDate(): Promise<void> {
-  const filterRef = ref(database, `${COMMAND_PATH}/filterStartDate`);
-  await set(filterRef, Date.now());
-}
-
+/**
+ * Mendengarkan status reset filter terakhir dari /Command/filterStartDate
+ * 
+ * @param callback Fungsi handler ketika tanggal filter berubah
+ * @returns Fungsi unsubscribe untuk membersihkan listener
+ */
 export function listenToFilterStartDate(
   callback: (timestamp: number | null) => void,
 ): () => void {
@@ -211,20 +175,132 @@ export function listenToFilterStartDate(
       callback(snapshot.exists() ? Number(snapshot.val()) : null);
     },
     (error: Error) => {
-      console.error("Firebase filter error:", error);
+      console.error("[listenToFilterStartDate] Firebase error:", error);
     },
   );
 
   return () => off(filterRef, "value", listener);
 }
 
-// ─── Historical Data ──────────────────────────────────────────────────────────
+/**
+ * Mendengarkan data sensor LiDAR secara real-time dari /LiDAR/latest
+ * 
+ * @param callback Fungsi handler ketika data LiDAR baru diterima
+ * @param onError Fungsi handler opsional ketika terjadi error
+ * @returns Fungsi unsubscribe untuk membersihkan listener
+ */
+export function listenToLidarData(
+  callback: (data: LidarData) => void,
+  onError?: (error: Error) => void,
+): () => void {
+  const lidarRef = ref(database, LIDAR_PATH);
 
+  const listener = onValue(
+    lidarRef,
+    (snapshot: DataSnapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        callback({
+          timestamp: String(data.timestamp || ""),
+          jarak_terdekat_cm: Number(data.jarak_terdekat_cm) || 0,
+        });
+      }
+    },
+    (error: Error) => {
+      console.error("[listenToLidarData] Firebase error:", error);
+      if (onError) onError(error);
+    },
+  );
+
+  return () => off(lidarRef, "value", listener);
+}
+
+// ============================================================================
+// 4. DATA WRITER & ACTIONS (COMMANDS)
+// ============================================================================
+
+/**
+ * Memperbarui pengaturan kontrol kipas dan navigasi di /Command secara parsial.
+ * Menggunakan `update` alih-alih `set` agar tidak menimpa atau menghapus field lain
+ * seperti target navigasi (goal_x, goal_y) atau tanggal filter.
+ * 
+ * @param state Konfigurasi kontrol kipas yang baru
+ */
+export async function setFanControl(state: FanControlState): Promise<void> {
+  const fanRef = ref(database, COMMAND_PATH);
+  await update(fanRef, {
+    speed: state.speed.toUpperCase(),
+    isAutoMode: state.isAutoMode,
+    updatedAt: Date.now(),
+  });
+}
+
+/**
+ * Menulis perintah arah pergerakan manual ke /Command/gerak
+ * 
+ * @param gerak Arah gerak ("MAJU", "MUNDUR", "KIRI", "KANAN", "DIAM")
+ */
+export async function setGerakCommand(gerak: string): Promise<void> {
+  const gerakRef = ref(database, `${COMMAND_PATH}/gerak`);
+  await set(gerakRef, gerak.toUpperCase());
+}
+
+/**
+ * Mengirim koordinat target rute navigasi otonom A* ke /Command
+ * 
+ * @param x Posisi target sumbu X (meter)
+ * @param y Posisi target sumbu Y (meter)
+ */
+export async function sendNavGoal(x: number, y: number): Promise<void> {
+  const goalXRef = ref(database, `${COMMAND_PATH}/goal_x`);
+  const goalYRef = ref(database, `${COMMAND_PATH}/goal_y`);
+  await set(goalXRef, x);
+  await set(goalYRef, y);
+}
+
+/**
+ * Membaca pengaturan kontrol kipas saat ini secara satu kali (one-shot)
+ * 
+ * @returns Konfigurasi kipas saat ini atau null jika data tidak ditemukan
+ */
+export async function getFanControl(): Promise<FanControlState | null> {
+  const fanRef = ref(database, COMMAND_PATH);
+  const snapshot = await get(fanRef);
+  
+  if (snapshot.exists()) {
+    const data = snapshot.val();
+    return {
+      speed: ((data.speed as string)?.toLowerCase() as FanSpeed) || "off",
+      isAutoMode: data.isAutoMode !== undefined ? Boolean(data.isAutoMode) : true,
+      updatedAt: data.updatedAt,
+    };
+  }
+  return null;
+}
+
+/**
+ * Mereset tanggal mulai penggunaan filter udara baru di /Command/filterStartDate
+ */
+export async function resetFilterStartDate(): Promise<void> {
+  const filterRef = ref(database, `${COMMAND_PATH}/filterStartDate`);
+  await set(filterRef, Date.now());
+}
+
+// ============================================================================
+// 5. HISTORICAL DATA SERVICES
+// ============================================================================
+
+/**
+ * Mengambil data historis sensor kualitas udara untuk visualisasi grafik.
+ * 
+ * @param days Jumlah rentang hari ke belakang yang ingin diambil
+ * @returns Array data historis kualitas udara terurut kronologis
+ */
 export async function getHistoricalData(
   days: number,
 ): Promise<HistoricalData[]> {
   return new Promise((resolve) => {
-    const historyRef = ref(database, "history");
+    const historyRef = ref(database, HISTORY_PATH);
 
     onValue(
       historyRef,
@@ -254,47 +330,17 @@ export async function getHistoricalData(
           }
         });
 
+        // Urutkan data berdasarkan timestamp terlama ke terbaru
         historicalData.sort(
           (a, b) => a.timestamp.getTime() - b.timestamp.getTime(),
         );
         resolve(historicalData);
       },
       (error: Error) => {
-        console.error("Error fetching historical data:", error);
+        console.error("[getHistoricalData] Error fetching historical data:", error);
         resolve([]);
       },
       { onlyOnce: true },
     );
   });
-}
-
-// ─── LiDAR Data ───────────────────────────────────────────────────────────────
-
-/**
- * Subscribe ke data LiDAR real-time dari /LiDAR/latest
- */
-export function listenToLidarData(
-  callback: (data: LidarData) => void,
-  onError?: (error: Error) => void,
-): () => void {
-  const lidarRef = ref(database, LIDAR_PATH);
-
-  const listener = onValue(
-    lidarRef,
-    (snapshot: DataSnapshot) => {
-      const data = snapshot.val();
-      if (data) {
-        callback({
-          timestamp: String(data.timestamp || ""),
-          jarak_terdekat_cm: Number(data.jarak_terdekat_cm) || 0,
-        });
-      }
-    },
-    (error: Error) => {
-      console.error("Firebase LiDAR error:", error);
-      if (onError) onError(error);
-    },
-  );
-
-  return () => off(lidarRef, "value", listener);
 }
