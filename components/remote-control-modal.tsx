@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Target, RotateCcw, Keyboard, X } from "lucide-react";
+import { Target, Keyboard, X, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { setGerakCommand } from "@/lib/firebase-data";
+import { setGerakCommand, listenToLidarData } from "@/lib/firebase-data";
 
 // ── Color Palette ─────────────────────────────────────────────────────────────
 const C = {
@@ -13,7 +13,6 @@ const C = {
   fillAct: "#1A2B42",
   neon: "#00F2FF",
   neonAct: "#00D1FF",
-  stop: "#FF3B30",
 } as const;
 
 // D-Pad direction → Firebase gerak value
@@ -34,17 +33,22 @@ function RadarView({
   posX,
   posY,
   activeDir,
+  lidarDistance,
+  lidarError,
   className,
   style,
 }: {
   posX: number;
   posY: number;
   activeDir: string | null;
+  lidarDistance: number | null;
+  lidarError: string | null;
   className?: string;
   style?: React.CSSProperties;
 }) {
   const dotX = 50 + posX * 0.35;
   const dotY = 50 + posY * 0.35;
+  const isObstacleClose = lidarDistance !== null && lidarDistance > 0 && lidarDistance < 40;
 
   // Continuous position update while a direction is held
   // (handled in parent via RAF, posX/posY already updated)
@@ -103,10 +107,34 @@ function RadarView({
       <div
         className="absolute bottom-2 left-1/2 -translate-x-1/2 z-20 font-mono text-[10px] whitespace-nowrap"
         style={{ color: `${C.neon}99` }}
-      >
-        X: {(posX * -0.782655510043378).toFixed(12)} | Y:{" "}
-        {(posY * -0.0573081694326074).toFixed(12)} | Z: 12.345678901235
+      ></div>
+
+      {/* Live LiDAR Distance display */}
+      <div className="absolute top-4 left-4 z-20 font-mono text-xs flex flex-col gap-1">
+        <div className="flex items-center gap-1.5">
+          <span className={cn("w-2 h-2 rounded-full", lidarDistance !== null && !lidarError ? "bg-emerald-500 animate-pulse" : "bg-red-500")} />
+          <span style={{ color: `${C.neon}dd` }}>LiDAR SENSOR: {lidarError ? "ERROR" : "ACTIVE"}</span>
+        </div>
+        {lidarError ? (
+          <span className="text-red-500 text-[10px] max-w-[180px] break-words">
+            Akses Ditolak (Cek Rules)
+          </span>
+        ) : lidarDistance !== null ? (
+          <span className={cn("text-base font-bold", isObstacleClose ? "text-red-500 animate-pulse" : "text-emerald-400")}>
+            {lidarDistance > 0 ? `${lidarDistance.toFixed(1)} cm` : "Tidak ada rintangan"}
+          </span>
+        ) : (
+          <span className="text-muted-foreground">Menghubungkan...</span>
+        )}
       </div>
+
+      {/* Flashing Warning Banner */}
+      {isObstacleClose && (
+        <div className="absolute top-4 right-4 z-20 bg-red-500/20 border border-red-500/50 text-red-500 font-mono text-[10px] sm:text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-2 animate-bounce">
+          <AlertTriangle className="w-3.5 h-3.5" />
+          <span>AWAS! RINTANGAN DEKAT</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -269,6 +297,27 @@ export function RemoteControlModal({
     "up" | "down" | "left" | "right" | null
   >(null);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [lidarDistance, setLidarDistance] = useState<number | null>(null);
+  const [lidarError, setLidarError] = useState<string | null>(null);
+
+  // Subscribe to real-time LiDAR distance
+  useEffect(() => {
+    if (!isOpen) return;
+    setLidarError(null);
+    const unsubscribe = listenToLidarData(
+      (data) => {
+        setLidarDistance(data.jarak_terdekat_cm);
+        setLidarError(null);
+      },
+      (error) => {
+        console.error("Firebase LiDAR listener error:", error);
+        setLidarError(error.message);
+      }
+    );
+    return () => {
+      unsubscribe();
+    };
+  }, [isOpen]);
 
   const clamp = (v: number) => Math.max(-100, Math.min(100, v));
 
@@ -342,14 +391,6 @@ export function RemoteControlModal({
     setGerakCommand("DIAM").catch(console.error);
   }, []);
 
-  // ── Reset ─────────────────────────────────────────────────────────────────
-  const handleReset = useCallback(() => {
-    activeDirRef.current = null;
-    setActiveDir(null);
-    setPosition({ x: 0, y: 0 });
-    setGerakCommand("DIAM").catch(console.error);
-  }, []);
-
   // ── Keyboard: keydown = press start, keyup = press end ───────────────────
   useEffect(() => {
     if (!isOpen) return;
@@ -372,13 +413,9 @@ export function RemoteControlModal({
     const onKeyDown = (e: KeyboardEvent) => {
       if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key))
         e.preventDefault();
-      if (e.repeat) return; // ignore key-repeat — RAF handles continuous movement
+      if (e.repeat) return;
       if (e.key === "Escape") {
         onClose();
-        return;
-      }
-      if (e.key === " ") {
-        handleReset();
         return;
       }
       const dir = KEY_MAP[e.key];
@@ -396,7 +433,7 @@ export function RemoteControlModal({
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
     };
-  }, [isOpen, handlePressStart, handlePressEnd, handleReset, onClose]);
+  }, [isOpen, handlePressStart, handlePressEnd, onClose]);
 
   // ── Cleanup on close ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -464,6 +501,8 @@ export function RemoteControlModal({
           posX={position.x}
           posY={position.y}
           activeDir={activeDir}
+          lidarDistance={lidarDistance}
+          lidarError={lidarError}
           className="flex-1 w-full min-h-[40vh] lg:min-h-0"
         />
 
@@ -484,59 +523,6 @@ export function RemoteControlModal({
             onPressEnd={handlePressEnd}
             activeDir={activeDir}
           />
-
-          {/* STOP & RESET */}
-          <div className="flex flex-col w-full gap-3">
-            <button
-              className="w-full h-11 flex items-center justify-center gap-2 rounded-md text-sm font-bold tracking-wider uppercase transition-all"
-              style={{
-                background: C.stop,
-                color: "#fff",
-                boxShadow: `0 0 16px ${C.stop}66`,
-                border: `1px solid ${C.stop}`,
-              }}
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLButtonElement).style.boxShadow =
-                  `0 0 28px ${C.stop}99`;
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLButtonElement).style.boxShadow =
-                  `0 0 16px ${C.stop}66`;
-              }}
-              onClick={() => {
-                handleReset();
-                onClose();
-              }}
-            >
-              <span className="w-2 h-2 rounded-full bg-white inline-block" />
-              Stop
-            </button>
-
-            <button
-              className="w-full h-11 flex items-center justify-center gap-2 rounded-md text-sm font-medium transition-all"
-              style={{
-                background: "transparent",
-                color: `${C.neon}cc`,
-                border: `1px solid ${C.neon}44`,
-              }}
-              onMouseEnter={(e) => {
-                const el = e.currentTarget as HTMLButtonElement;
-                el.style.background = C.fill;
-                el.style.borderColor = `${C.neon}99`;
-                el.style.color = C.neon;
-              }}
-              onMouseLeave={(e) => {
-                const el = e.currentTarget as HTMLButtonElement;
-                el.style.background = "transparent";
-                el.style.borderColor = `${C.neon}44`;
-                el.style.color = `${C.neon}cc`;
-              }}
-              onClick={handleReset}
-            >
-              <RotateCcw className="w-4 h-4" />
-              Reset
-            </button>
-          </div>
 
           {/* Keyboard hint */}
           <div

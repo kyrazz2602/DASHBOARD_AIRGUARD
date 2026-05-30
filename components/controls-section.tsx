@@ -14,6 +14,7 @@ import {
   Radio,
 } from "lucide-react";
 import { RemoteControlModal } from "./remote-control-modal";
+import { MapPlanningModal } from "./map-planning-modal";
 import {
   detectRecommendedFanSpeed,
   FanSpeed,
@@ -69,6 +70,7 @@ export function ControlsSection({
   sensorData,
 }: ControlsSectionProps) {
   const [isRemoteOpen, setIsRemoteOpen] = useState(false);
+  const [isMapOpen, setIsMapOpen] = useState(false);
   const recommendedSpeed = detectRecommendedFanSpeed(sensorData);
 
   const {
@@ -95,7 +97,10 @@ export function ControlsSection({
       <div className="space-y-3">
         {/* Quick Actions */}
         <div className="grid grid-cols-2 gap-3">
-          <button className="flex items-center gap-3 p-4 rounded-2xl bg-card border border-border/60 hover:border-primary/40 hover:bg-primary/5 transition-all duration-200 group text-left">
+          <button
+            onClick={() => setIsMapOpen(true)}
+            className="flex items-center gap-3 p-4 rounded-2xl bg-card border border-border/60 hover:border-primary/40 hover:bg-primary/5 transition-all duration-200 group text-left"
+          >
             <div className="p-2 rounded-xl bg-primary/10 text-primary group-hover:bg-primary/20 transition-colors">
               <Map className="w-4 h-4" />
             </div>
@@ -272,6 +277,11 @@ export function ControlsSection({
       <RemoteControlModal
         isOpen={isRemoteOpen}
         onClose={() => setIsRemoteOpen(false)}
+      />
+
+      <MapPlanningModal
+        isOpen={isMapOpen}
+        onClose={() => setIsMapOpen(false)}
       />
     </>
   );

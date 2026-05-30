@@ -489,32 +489,32 @@ export default function HomePage() {
               title="PM 2.5"
               unit="μg/m³"
               desc="Partikel Halus"
-              detail="Partikel berdiameter ≤2.5 mikron yang dapat menembus paru-paru dan masuk ke aliran darah."
-              limit="≤ 35"
-              safeValue={5}
-              exampleValue={12}
+              detail="Partikel berdiameter ≤2.5 mikron yang dapat menembus paru-paru dan masuk ke aliran darah. Dipantau sesuai standar WHO."
+              limit="≤ 35.4"
+              safeValue={35.4}
+              exampleValue={12.5}
               color="text-blue-500"
               iconBg="from-blue-500/20 to-cyan-500/10"
               accentBorder="border-blue-500/30"
-              riskLevel="Sedang"
-              riskColor="text-amber-500"
-              riskBg="bg-amber-500/10 border-amber-500/20"
+              riskLevel="Aman"
+              riskColor="text-green-500"
+              riskBg="bg-green-500/10 border-green-500/20"
               sources={["Kendaraan", "Industri", "Pembakaran"]}
             />
             <SensorMetric
               title="PM 10"
               unit="μg/m³"
               desc="Partikel Debu"
-              detail="Partikel berdiameter ≤10 mikron yang dapat terhirup dan mengiritasi saluran pernapasan."
+              detail="Partikel berdiameter ≤10 mikron yang dapat terhirup dan mengiritasi saluran pernapasan bagian atas."
               limit="≤ 154"
-              safeValue={15}
-              exampleValue={28}
+              safeValue={154}
+              exampleValue={20.1}
               color="text-cyan-500"
               iconBg="from-cyan-500/20 to-teal-500/10"
               accentBorder="border-cyan-500/30"
-              riskLevel="Tinggi"
-              riskColor="text-red-500"
-              riskBg="bg-red-500/10 border-red-500/20"
+              riskLevel="Aman"
+              riskColor="text-green-500"
+              riskBg="bg-green-500/10 border-green-500/20"
               sources={["Debu Jalan", "Konstruksi", "Pertanian"]}
             />
             <SensorMetric
@@ -523,11 +523,11 @@ export default function HomePage() {
               desc="Karbon Monoksida"
               detail="Gas tidak berwarna dan tidak berbau yang sangat berbahaya, menghambat pengikatan oksigen dalam darah."
               limit="≤ 15"
-              safeValue={7}
-              exampleValue={3}
-              color="text-red-500"
-              iconBg="from-red-500/20 to-orange-500/10"
-              accentBorder="border-red-500/30"
+              safeValue={15}
+              exampleValue={3.2}
+              color="text-orange-500"
+              iconBg="from-orange-500/20 to-red-500/10"
+              accentBorder="border-orange-500/30"
               riskLevel="Aman"
               riskColor="text-green-500"
               riskBg="bg-green-500/10 border-green-500/20"
@@ -538,12 +538,12 @@ export default function HomePage() {
               unit="ppm"
               desc="Senyawa Organik Volatil"
               detail="Senyawa kimia organik yang mudah menguap dari cat, furnitur, dan produk pembersih rumah tangga."
-              limit="< 20"
+              limit="≤ 20"
               safeValue={20}
-              exampleValue={12}
-              color="text-green-500"
-              iconBg="from-green-500/20 to-emerald-500/10"
-              accentBorder="border-green-500/30"
+              exampleValue={1.8}
+              color="text-emerald-500"
+              iconBg="from-emerald-500/20 to-green-500/10"
+              accentBorder="border-emerald-500/30"
               riskLevel="Aman"
               riskColor="text-green-500"
               riskBg="bg-green-500/10 border-green-500/20"
@@ -927,7 +927,8 @@ function SensorMetric({
   riskBg: string;
   sources: string[];
 }) {
-  const pct = Math.min((exampleValue / (safeValue * 2)) * 100, 100);
+  const max = safeValue * 1.5;
+  const pct = Math.min((exampleValue / max) * 100, 100);
   const isSafe = exampleValue <= safeValue;
 
   return (
@@ -975,7 +976,7 @@ function SensorMetric({
           <span className="font-semibold">
             Batas WHO: {limit} {unit}
           </span>
-          <span>{safeValue * 2}+</span>
+          <span>{Math.round(safeValue * 1.5)}+</span>
         </div>
         <div className="relative h-2 rounded-full bg-muted overflow-hidden">
           {/* Safe zone marker */}

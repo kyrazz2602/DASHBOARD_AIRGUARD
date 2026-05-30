@@ -22,6 +22,10 @@ Di Firebase Console → Realtime Database → Rules:
     "history": {
       ".read": "auth != null",
       ".write": "auth != null"
+    },
+    "LiDAR": {
+      ".read": "auth != null",
+      ".write": "auth != null"
     }
   }
 }
@@ -204,20 +208,6 @@ db.ref("history/" + Date.now()).set({
 - Pastikan Firebase Rules sudah diupdate sesuai bagian 1
 - Cek database URL di `.env.local`
 - Pastikan user sudah login (rules menggunakan `auth != null`)
-
-### Missing environment variables
-
-Buat file `.env.local` di root project:
-
-```env
-NEXT_PUBLIC_FIREBASE_API_KEY=...
-NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=...
-NEXT_PUBLIC_FIREBASE_DATABASE_URL=...
-NEXT_PUBLIC_FIREBASE_PROJECT_ID=...
-NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=...
-NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=...
-NEXT_PUBLIC_FIREBASE_APP_ID=...
-```
 
 ### Data sensor tidak muncul di dashboard
 

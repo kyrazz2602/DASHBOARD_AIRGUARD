@@ -20,11 +20,17 @@ export interface DeviceStatus {
   rpmKiri: number;
 }
 
+export interface LidarData {
+  timestamp: string;
+  jarak_terdekat_cm: number;
+}
+
 // ─── Paths ────────────────────────────────────────────────────────────────────
 
 const UDARA_PATH = "Udara";
 const STATUS_PATH = "Status";
 const COMMAND_PATH = "Command";
+const LIDAR_PATH = "LiDAR/latest";
 
 // ─── Sensor Data ─────────────────────────────────────────────────────────────
 
@@ -124,6 +130,16 @@ export async function setFanControl(state: FanControlState): Promise<void> {
 export async function setGerakCommand(gerak: string): Promise<void> {
   const gerakRef = ref(database, `${COMMAND_PATH}/gerak`);
   await set(gerakRef, gerak.toUpperCase());
+}
+
+/**
+ * Mengirim koordinat target navigasi otonom (A* Path Planning) ke /Command
+ */
+export async function sendNavGoal(x: number, y: number): Promise<void> {
+  const goalXRef = ref(database, `${COMMAND_PATH}/goal_x`);
+  const goalYRef = ref(database, `${COMMAND_PATH}/goal_y`);
+  await set(goalXRef, x);
+  await set(goalYRef, y);
 }
 
 /**
@@ -250,4 +266,35 @@ export async function getHistoricalData(
       { onlyOnce: true },
     );
   });
+}
+
+// ─── LiDAR Data ───────────────────────────────────────────────────────────────
+
+/**
+ * Subscribe ke data LiDAR real-time dari /LiDAR/latest
+ */
+export function listenToLidarData(
+  callback: (data: LidarData) => void,
+  onError?: (error: Error) => void,
+): () => void {
+  const lidarRef = ref(database, LIDAR_PATH);
+
+  const listener = onValue(
+    lidarRef,
+    (snapshot: DataSnapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        callback({
+          timestamp: String(data.timestamp || ""),
+          jarak_terdekat_cm: Number(data.jarak_terdekat_cm) || 0,
+        });
+      }
+    },
+    (error: Error) => {
+      console.error("Firebase LiDAR error:", error);
+      if (onError) onError(error);
+    },
+  );
+
+  return () => off(lidarRef, "value", listener);
 }
