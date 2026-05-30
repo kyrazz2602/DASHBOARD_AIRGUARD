@@ -236,6 +236,22 @@ export async function setFanControl(state: FanControlState): Promise<void> {
 }
 
 /**
+ * Mengatur mode navigasi robot (Otonom / Manual) di Firebase secara bersamaan
+ * 
+ * @param isAuto true untuk otonom (autonomous), false untuk manual
+ */
+export async function setNavigationMode(isAuto: boolean): Promise<void> {
+  const fanRef = ref(database, COMMAND_PATH);
+  await update(fanRef, {
+    isAutoMode: isAuto,
+    updatedAt: Date.now(),
+  });
+
+  const robotModeRef = ref(database, "robot/control/mode");
+  await set(robotModeRef, isAuto ? "autonomous" : "manual");
+}
+
+/**
  * Menulis perintah arah pergerakan manual ke /Command/gerak
  * 
  * @param gerak Arah gerak ("MAJU", "MUNDUR", "KIRI", "KANAN", "DIAM")

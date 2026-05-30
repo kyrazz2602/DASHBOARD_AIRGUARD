@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Target, Keyboard, X, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { setGerakCommand, listenToLidarData } from "@/lib/firebase-data";
+import { setGerakCommand, listenToLidarData, setNavigationMode } from "@/lib/firebase-data";
 
 // ── Color Palette ─────────────────────────────────────────────────────────────
 const C = {
@@ -292,9 +292,15 @@ export function RemoteControlModal({
   const [lidarDistance, setLidarDistance] = useState<number | null>(null);
   const [lidarError, setLidarError] = useState<string | null>(null);
 
-  // Subscribe to real-time LiDAR distance
+  // Subscribe to real-time LiDAR distance and initialize manual mode
   useEffect(() => {
     if (!isOpen) return;
+
+    // Set robot to manual mode when remote control is opened
+    setNavigationMode(false).catch((error) => {
+      console.error("[RemoteControl] Failed to set manual navigation mode:", error);
+    });
+
     setLidarError(null);
     const unsubscribe = listenToLidarData(
       (data) => {

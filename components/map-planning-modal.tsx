@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { MapPin, X, Navigation, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { sendNavGoal } from "@/lib/firebase-data";
+import { sendNavGoal, setNavigationMode } from "@/lib/firebase-data";
 
 const C = {
   bg: "#0B0E14",
@@ -24,9 +24,13 @@ export function MapPlanningModal({ isOpen, onClose }: MapPlanningModalProps) {
   const [sentStatus, setSentStatus] = useState<"idle" | "success" | "error">("idle");
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Reset states when opened/closed
+  // Reset states and set autonomous mode when opened
   useEffect(() => {
-    if (!isOpen) {
+    if (isOpen) {
+      setNavigationMode(true).catch((err) => {
+        console.error("[MapPlanning] Failed to set autonomous navigation mode:", err);
+      });
+    } else {
       setSelectedPoint(null);
       setSentStatus("idle");
     }
