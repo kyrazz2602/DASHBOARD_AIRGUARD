@@ -127,14 +127,6 @@ function RadarView({
           <span className="text-muted-foreground">Menghubungkan...</span>
         )}
       </div>
-
-      {/* Flashing Warning Banner */}
-      {isObstacleClose && (
-        <div className="absolute top-4 right-4 z-20 bg-red-500/20 border border-red-500/50 text-red-500 font-mono text-[10px] sm:text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-2 animate-bounce">
-          <AlertTriangle className="w-3.5 h-3.5" />
-          <span>AWAS! RINTANGAN DEKAT</span>
-        </div>
-      )}
     </div>
   );
 }
