@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSensorData } from "@/hooks/use-sensor-data";
 import { SensorCard } from "@/components/sensor-card";
 import { ControlsSection } from "@/components/controls-section";
@@ -49,6 +49,8 @@ export default function Dashboard({ user }: { user: User }) {
     "Good" | "Warning" | "Danger"
   >("Good");
 
+  const prevAlertsRef = useRef<string>("");
+
   const firstName = (
     user.displayName ||
     user.email?.split("@")[0] ||
@@ -64,49 +66,61 @@ export default function Dashboard({ user }: { user: User }) {
 
   useEffect(() => {
     const checks = [
-      {
-        condition: sensorData.pm25 > WHO_STANDARDS.PM2_5.warning,
-        message: `PM2.5 ${sensorData.pm25.toFixed(1)} μg/m³ — ${getStatusLabel(sensorData.pm25, "PM2_5")}`,
-        type:
-          sensorData.pm25 > WHO_STANDARDS.PM2_5.danger
-            ? ("danger" as const)
-            : ("warning" as const),
-      },
-      {
-        condition: sensorData.co > WHO_STANDARDS.CO.warning,
-        message: `CO ${sensorData.co.toFixed(1)} ppm — ${getStatusLabel(sensorData.co, "CO")}`,
-        type:
-          sensorData.co > WHO_STANDARDS.CO.danger
-            ? ("danger" as const)
-            : ("warning" as const),
-      },
-      {
-        condition: sensorData.voc > WHO_STANDARDS.VOC.warning,
-        message: `VOC ${sensorData.voc.toFixed(1)} ppm — ${getStatusLabel(sensorData.voc, "VOC")}`,
-        type:
-          sensorData.voc > WHO_STANDARDS.VOC.danger
-            ? ("danger" as const)
-            : ("warning" as const),
-      },
-    ];
+      { name: "PM2.5", value: sensorData.pm25, type: "PM2_5" as const, unit: "μg/m³" },
+      { name: "PM10", value: sensorData.pm10, type: "PM10" as const, unit: "μg/m³" },
+      { name: "CO", value: sensorData.co, type: "CO" as const, unit: "ppm" },
+      { name: "VOC", value: sensorData.voc, type: "VOC" as const, unit: "ppm" },
+    ].map((param) => {
+      const status = getStatusLabel(param.value, param.type);
+      return {
+        ...param,
+        status,
+        isAlert: status !== "Safe",
+      };
+    });
 
-    if (checks.some((c) => c.type === "danger" && c.condition)) {
+    const activeAlerts = checks.filter((c) => c.isAlert);
+    const hasDanger = activeAlerts.some((c) => c.status === "Danger");
+    const hasWarning = activeAlerts.some((c) => c.status === "Warning");
+
+    if (hasDanger) {
       setOverallStatus("Danger");
-    } else if (checks.some((c) => c.type === "warning" && c.condition)) {
+    } else if (hasWarning) {
       setOverallStatus("Warning");
     } else {
       setOverallStatus("Good");
     }
 
-    const activeCheck = checks.find((c) => c.condition);
-    if (activeCheck) {
-      setNotification({
-        message: activeCheck.message,
-        type: activeCheck.type,
-        visible: true,
-      });
+    // Create a unique key to detect alert status changes
+    const alertsKey = activeAlerts
+      .map((c) => `${c.name}:${c.status}`)
+      .join(",");
+
+    if (alertsKey !== prevAlertsRef.current) {
+      if (activeAlerts.length > 0) {
+        const message = activeAlerts
+          .map((alert) => {
+            const statusIndo = alert.status === "Danger" ? "bahaya" : "warning";
+            return `${alert.name} dalam kondisi ${statusIndo} (${alert.value.toFixed(1)} ${alert.unit})`;
+          })
+          .join("\n");
+
+        setNotification({
+          message,
+          type: hasDanger ? "danger" : "warning",
+          visible: true,
+        });
+      } else {
+        setNotification((prev) => ({ ...prev, visible: false }));
+      }
+      prevAlertsRef.current = alertsKey;
     }
-  }, [sensorData.pm25, sensorData.co, sensorData.voc]);
+  }, [
+    sensorData.pm25,
+    sensorData.pm10,
+    sensorData.co,
+    sensorData.voc,
+  ]);
 
   const statusConfig = {
     Good: {

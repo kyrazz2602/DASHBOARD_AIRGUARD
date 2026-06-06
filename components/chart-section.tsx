@@ -3,17 +3,19 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Download, Square, Circle, Calendar, Activity } from "lucide-react";
+import { Download, Square, Circle, Calendar, Activity, Info } from "lucide-react";
 import {
   AreaChart,
   Area,
+  LineChart,
+  Line,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import { generateHistoricalData } from "@/lib/sensor-data";
+import { generateHistoricalData, getStatusLabel, WHO_STANDARDS } from "@/lib/sensor-data";
 import { getHistoricalData, listenToSensorData } from "@/lib/firebase-data";
 import { cn } from "@/lib/utils";
 
@@ -52,6 +54,14 @@ const SENSOR_CONFIG = {
     min: 0,
     max: 8,
   },
+  all: {
+    label: "Gabungan",
+    color: "#6366F1",
+    unit: "",
+    description: "Grafik komparatif real-time yang memadukan seluruh parameter kualitas udara",
+    min: 0,
+    max: 100,
+  },
 } as const;
 
 type SensorType = keyof typeof SENSOR_CONFIG;
@@ -67,6 +77,81 @@ interface DataRow {
   suhu: number;
 }
 
+// ─── Custom Tooltip Component ───────────────────────────────────────────────
+
+interface CustomTooltipProps {
+  active?: boolean;
+  payload?: any[];
+  label?: number;
+}
+
+const CustomTooltip = ({ active, payload, label }: CustomTooltipProps) => {
+  if (!active || !payload || !payload.length) return null;
+
+  const formattedTime = label
+    ? new Date(label).toLocaleString("id-ID", {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      })
+    : "";
+
+  return (
+    <div className="bg-card border border-border rounded-xl p-3.5 shadow-lg backdrop-blur-md min-w-[230px] z-50 animate-in fade-in zoom-in-95 duration-150">
+      <p className="text-[11px] font-semibold text-muted-foreground mb-2">
+        {formattedTime}
+      </p>
+      <div className="space-y-2.5">
+        {payload.map((item: any) => {
+          const key = item.dataKey as SensorType;
+          if (key === "all") return null;
+
+          const conf = SENSOR_CONFIG[key];
+          if (!conf) return null;
+
+          const val = item.value as number;
+          const stdType = key === "pm25" ? "PM2_5" : key === "pm10" ? "PM10" : key === "co" ? "CO" : "VOC";
+          const status = getStatusLabel(val, stdType) as "Safe" | "Warning" | "Danger";
+          const standards = WHO_STANDARDS[stdType];
+
+          const statusColors = {
+            Safe: "text-emerald-600 bg-emerald-500/10 border-emerald-500/20 dark:text-emerald-400 dark:border-emerald-500/30",
+            Warning: "text-amber-600 bg-amber-500/10 border-amber-500/20 dark:text-amber-400 dark:border-amber-500/30",
+            Danger: "text-red-600 bg-red-500/10 border-red-500/20 dark:text-red-400 dark:border-red-500/30",
+          };
+          const statusLabels = {
+            Safe: "Aman",
+            Warning: "Perhatian",
+            Danger: "Bahaya",
+          };
+
+          return (
+            <div key={key} className="space-y-1">
+              <div className="flex items-center justify-between gap-4 text-xs">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: item.color || item.stroke || conf.color }} />
+                  <span className="font-bold text-foreground">{conf.label}</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="font-bold tabular-nums">
+                    {val.toFixed(2)} <span className="text-[10px] text-muted-foreground font-normal">{conf.unit}</span>
+                  </span>
+                  <span className={cn("px-1.5 py-0.5 rounded-md text-[9px] font-bold border", statusColors[status])}>
+                    {statusLabels[status]}
+                  </span>
+                </div>
+              </div>
+              <p className="text-[9px] text-muted-foreground/70 pl-4 leading-none">
+                Batas WHO: Aman ≤{standards.safe} | Peringatan ≤{standards.warning} {conf.unit}
+              </p>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function ChartSection() {
@@ -74,6 +159,13 @@ export function ChartSection() {
   const [selectedSensor, setSelectedSensor] = useState<SensorType>("pm25");
   const [chartData, setChartData] = useState<DataRow[]>([]);
   const [isFirebaseConnected, setIsFirebaseConnected] = useState(false);
+  const [showGuide, setShowGuide] = useState(false);
+  const [visibleLines, setVisibleLines] = useState<Record<"pm25" | "pm10" | "co" | "voc", boolean>>({
+    pm25: true,
+    pm10: true,
+    co: true,
+    voc: true,
+  });
 
   // ── Recording state ──────────────────────────────────────────────────────
   const [isRecording, setIsRecording] = useState(false);
@@ -478,6 +570,56 @@ export function ChartSection() {
               </button>
             ))}
           </div>
+
+          {/* Line Toggles for Combined Chart */}
+          {selectedSensor === "all" && (
+            <div className="flex gap-2 flex-wrap items-center mt-3 p-1.5 bg-muted/30 border border-border/40 rounded-xl max-w-fit animate-in fade-in slide-in-from-top-1 duration-200">
+              <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest px-2">
+                Filter:
+              </span>
+              {(["pm25", "pm10", "co", "voc"] as const).map((key) => {
+                const colors = {
+                  pm25: "#8B5CF6",
+                  pm10: "#3B82F6",
+                  co: "#F59E0B",
+                  voc: "#10B981",
+                };
+                const labels = {
+                  pm25: "PM2.5",
+                  pm10: "PM10",
+                  co: "CO",
+                  voc: "VOC",
+                };
+                const active = visibleLines[key];
+                return (
+                  <button
+                    key={key}
+                    onClick={() =>
+                      setVisibleLines((prev) => ({
+                        ...prev,
+                        [key]: !prev[key],
+                      }))
+                    }
+                    className={cn(
+                      "px-2 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1.5 border transition-all duration-150",
+                      active
+                        ? "bg-card text-foreground shadow-xs"
+                        : "bg-muted/10 border-dashed border-border/60 text-muted-foreground/50 hover:text-muted-foreground",
+                    )}
+                    style={{
+                      borderColor: active ? colors[key] : "transparent",
+                    }}
+                  >
+                    <span
+                      className="w-1.5 h-1.5 rounded-full shrink-0"
+                      style={{ backgroundColor: colors[key] }}
+                    />
+                    {labels[key]}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* Time range selector */}
@@ -507,105 +649,180 @@ export function ChartSection() {
       {/* ── Chart ── */}
       <div className="h-[300px] sm:h-[350px] w-full">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart
-            data={chartData}
-            margin={{ top: 8, right: 8, left: -20, bottom: 0 }}
-          >
-            <defs>
-              <linearGradient
-                id={`grad-${selectedSensor}`}
-                x1="0"
-                y1="0"
-                x2="0"
-                y2="1"
-              >
-                <stop offset="5%" stopColor={config.color} stopOpacity={0.25} />
-                <stop offset="95%" stopColor={config.color} stopOpacity={0} />
-              </linearGradient>
-            </defs>
+          {selectedSensor === "all" ? (
+            <LineChart
+              data={chartData}
+              margin={{ top: 8, right: 8, left: -20, bottom: 0 }}
+            >
+              <CartesianGrid
+                strokeDasharray="3 3"
+                stroke="currentColor"
+                className="text-border/40"
+                vertical={false}
+              />
 
-            <CartesianGrid
-              strokeDasharray="3 3"
-              stroke="currentColor"
-              className="text-border/40"
-              vertical={false}
-            />
+              <XAxis
+                dataKey="timestamp"
+                tickFormatter={formatXAxis}
+                tick={{
+                  fontSize: 11,
+                  fill: "currentColor",
+                  className: "text-muted-foreground",
+                }}
+                tickLine={false}
+                axisLine={false}
+                dy={8}
+                interval="preserveStartEnd"
+                minTickGap={40}
+              />
 
-            <XAxis
-              dataKey="timestamp"
-              tickFormatter={formatXAxis}
-              tick={{
-                fontSize: 11,
-                fill: "currentColor",
-                className: "text-muted-foreground",
-              }}
-              tickLine={false}
-              axisLine={false}
-              dy={8}
-              interval="preserveStartEnd"
-              minTickGap={40}
-            />
+              <YAxis
+                tick={{
+                  fontSize: 11,
+                  fill: "currentColor",
+                  className: "text-muted-foreground",
+                }}
+                tickLine={false}
+                axisLine={false}
+                dx={-8}
+                domain={[0, "auto"]}
+              />
 
-            <YAxis
-              tick={{
-                fontSize: 11,
-                fill: "currentColor",
-                className: "text-muted-foreground",
-              }}
-              tickLine={false}
-              axisLine={false}
-              dx={-8}
-              domain={[config.min, "auto"]}
-            />
+              <Tooltip content={<CustomTooltip />} />
 
-            <Tooltip
-              contentStyle={{
-                backgroundColor: "hsl(var(--card))",
-                border: "1px solid hsl(var(--border))",
-                borderRadius: "10px",
-                boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
-                color: "hsl(var(--foreground))",
-                fontSize: "12px",
-              }}
-              labelStyle={{
-                color: "hsl(var(--muted-foreground))",
-                marginBottom: 4,
-              }}
-              itemStyle={{ color: config.color, fontWeight: 600 }}
-              labelFormatter={(ts) =>
-                new Date(ts).toLocaleString("id-ID", {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                  second: "2-digit",
-                })
-              }
-              formatter={(v: number) => [
-                `${v.toFixed(2)} ${config.unit}`,
-                config.label,
-              ]}
-            />
+              {visibleLines.pm25 && (
+                <Line
+                  type="monotone"
+                  dataKey="pm25"
+                  name="PM2.5 (μg/m³)"
+                  stroke="#8B5CF6"
+                  strokeWidth={2}
+                  dot={false}
+                  activeDot={{ r: 4, strokeWidth: 0 }}
+                  isAnimationActive={false}
+                />
+              )}
+              {visibleLines.pm10 && (
+                <Line
+                  type="monotone"
+                  dataKey="pm10"
+                  name="PM10 (μg/m³)"
+                  stroke="#3B82F6"
+                  strokeWidth={2}
+                  dot={false}
+                  activeDot={{ r: 4, strokeWidth: 0 }}
+                  isAnimationActive={false}
+                />
+              )}
+              {visibleLines.co && (
+                <Line
+                  type="monotone"
+                  dataKey="co"
+                  name="CO (ppm)"
+                  stroke="#F59E0B"
+                  strokeWidth={2}
+                  dot={false}
+                  activeDot={{ r: 4, strokeWidth: 0 }}
+                  isAnimationActive={false}
+                />
+              )}
+              {visibleLines.voc && (
+                <Line
+                  type="monotone"
+                  dataKey="voc"
+                  name="VOC (ppm)"
+                  stroke="#10B981"
+                  strokeWidth={2}
+                  dot={false}
+                  activeDot={{ r: 4, strokeWidth: 0 }}
+                  isAnimationActive={false}
+                />
+              )}
+            </LineChart>
+          ) : (
+            <AreaChart
+              data={chartData}
+              margin={{ top: 8, right: 8, left: -20, bottom: 0 }}
+            >
+              <defs>
+                <linearGradient
+                  id={`grad-${selectedSensor}`}
+                  x1="0"
+                  y1="0"
+                  x2="0"
+                  y2="1"
+                >
+                  <stop offset="5%" stopColor={config.color} stopOpacity={0.25} />
+                  <stop offset="95%" stopColor={config.color} stopOpacity={0} />
+                </linearGradient>
+              </defs>
 
-            <Area
-              type="monotone"
-              dataKey={selectedSensor}
-              stroke={config.color}
-              strokeWidth={2.5}
-              fillOpacity={1}
-              fill={`url(#grad-${selectedSensor})`}
-              isAnimationActive={false}
-              dot={false}
-              activeDot={{ r: 4, strokeWidth: 0 }}
-            />
-          </AreaChart>
+              <CartesianGrid
+                strokeDasharray="3 3"
+                stroke="currentColor"
+                className="text-border/40"
+                vertical={false}
+              />
+
+              <XAxis
+                dataKey="timestamp"
+                tickFormatter={formatXAxis}
+                tick={{
+                  fontSize: 11,
+                  fill: "currentColor",
+                  className: "text-muted-foreground",
+                }}
+                tickLine={false}
+                axisLine={false}
+                dy={8}
+                interval="preserveStartEnd"
+                minTickGap={40}
+              />
+
+              <YAxis
+                tick={{
+                  fontSize: 11,
+                  fill: "currentColor",
+                  className: "text-muted-foreground",
+                }}
+                tickLine={false}
+                axisLine={false}
+                dx={-8}
+                domain={[config.min, "auto"]}
+              />
+
+              <Tooltip content={<CustomTooltip />} />
+
+              <Area
+                type="monotone"
+                dataKey={selectedSensor}
+                stroke={config.color}
+                strokeWidth={2.5}
+                fillOpacity={1}
+                fill={`url(#grad-${selectedSensor})`}
+                isAnimationActive={false}
+                dot={false}
+                activeDot={{ r: 4, strokeWidth: 0 }}
+              />
+            </AreaChart>
+          )}
         </ResponsiveContainer>
       </div>
 
       {/* ── Recording hint ── */}
       {isLive && !isRecording && (
-        <p className="text-[11px] text-muted-foreground text-center mt-3">
-          Klik <span className="font-semibold text-foreground">Rekam CSV</span>{" "}
-          untuk mulai merekam data real-time dari Firebase. Data tersimpan
-          setiap update (~3 detik).
+        <p className="text-[11px] text-muted-foreground text-center mt-3 animate-in fade-in duration-200">
+          {selectedSensor === "all" ? (
+            <span>
+              Parameter memiliki satuan berbeda (ppm / μg/m³). Gunakan filter tombol di atas untuk memfokuskan grafik.
+            </span>
+          ) : (
+            <span>
+              Klik <span className="font-semibold text-foreground">Rekam CSV</span>{" "}
+              untuk mulai merekam data real-time dari Firebase. Data tersimpan
+              setiap update (~3 detik).
+            </span>
+          )}
         </p>
       )}
       {isRecording && (
@@ -615,6 +832,56 @@ export function ChartSection() {
           mengunduh.
         </p>
       )}
+      {/* ── Collapsible Guide ── */}
+      <div className="mt-4 pt-4 border-t border-border/40">
+        <button
+          onClick={() => setShowGuide(!showGuide)}
+          className="text-xs font-semibold text-primary hover:underline flex items-center gap-1.5 focus:outline-none"
+        >
+          <Info className="w-3.5 h-3.5" />
+          {showGuide ? "Sembunyikan Panduan Kualitas Udara" : "Tampilkan Panduan Kualitas Udara & Batas Ambang WHO"}
+        </button>
+
+        {showGuide && (
+          <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3 text-xs text-muted-foreground animate-in fade-in slide-in-from-top-2 duration-200">
+            <div className="space-y-2.5 p-3 rounded-xl bg-muted/20 border border-border/30">
+              <p className="font-bold text-foreground text-[11px] uppercase tracking-wider text-indigo-500">
+                Partikel Debu (Partikulat)
+              </p>
+              <div className="space-y-2 text-justify">
+                <p>
+                  <span className="font-semibold text-foreground">PM2.5 (Debu Halus):</span> Partikel berukuran &lt; 2.5 µm yang berasal dari asap kendaraan dan industri. Karena ukurannya yang sangat kecil, ia dapat menembus sistem paru-paru terdalam dan masuk ke aliran darah.
+                  <br />
+                  <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">Aman: ≤35.4 μg/m³</span> | <span className="text-[10px] text-amber-600 dark:text-amber-400 font-bold">Perhatian: ≤125.4 μg/m³</span>
+                </p>
+                <p>
+                  <span className="font-semibold text-foreground">PM10 (Debu Kasar):</span> Partikel berukuran &lt; 10 µm berupa debu jalanan, konstruksi, atau serbuk sari. Dapat mengiritasi mata, hidung, dan tenggorokan.
+                  <br />
+                  <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">Aman: ≤154 μg/m³</span> | <span className="text-[10px] text-amber-600 dark:text-amber-400 font-bold">Perhatian: ≤354 μg/m³</span>
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-2.5 p-3 rounded-xl bg-muted/20 border border-border/30">
+              <p className="font-bold text-foreground text-[11px] uppercase tracking-wider text-indigo-500">
+                Gas Polutan & Bahan Kimia
+              </p>
+              <div className="space-y-2 text-justify">
+                <p>
+                  <span className="font-semibold text-foreground">CO (Karbon Monoksida):</span> Gas berbahaya tidak berwarna dan tidak berbau hasil pembakaran mesin. Menghalangi darah membawa oksigen ke otak dan jantung.
+                  <br />
+                  <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">Aman: ≤15 ppm</span> | <span className="text-[10px] text-amber-600 dark:text-amber-400 font-bold">Perhatian: ≤50 ppm</span>
+                </p>
+                <p>
+                  <span className="font-semibold text-foreground">VOC (Senyawa Organik Menguap):</span> Uap kimia dari cat, parfum, pembersih rumah, dan lem. Dapat memicu pusing, iritasi mata, dan gangguan pernapasan.
+                  <br />
+                  <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">Aman: ≤20 ppm</span> | <span className="text-[10px] text-amber-600 dark:text-amber-400 font-bold">Perhatian: ≤100 ppm</span>
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     </Card>
   );
 }

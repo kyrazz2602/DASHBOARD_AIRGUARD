@@ -110,7 +110,7 @@ export function MapPlanningModal({ isOpen, onClose }: MapPlanningModalProps) {
             className="font-bold tracking-wider text-sm uppercase"
             style={{ color: C.neon }}
           >
-            A* Map Planning (Nav2)
+            A* Map Planning — Rute Otomatis (Nav2)
           </span>
         </div>
         <button
@@ -184,7 +184,7 @@ export function MapPlanningModal({ isOpen, onClose }: MapPlanningModalProps) {
         >
           <div className="space-y-4">
             <div className="space-y-1">
-              <h3 className="text-sm font-bold text-foreground uppercase tracking-wider">Navigasi Target</h3>
+              <h3 className="text-sm font-bold text-foreground uppercase tracking-wider">Navigasi Rute Otomatis</h3>
               <p className="text-xs text-muted-foreground">
                 Tentukan target koordinat perjalanan robot pada area 2D di sebelah kiri.
               </p>
@@ -213,9 +213,13 @@ export function MapPlanningModal({ isOpen, onClose }: MapPlanningModalProps) {
             </div>
 
             {/* Instruction Alert */}
-            <div className="p-3 rounded-lg bg-slate-950 text-[10px] leading-relaxed text-slate-400 border border-slate-800">
-              <p className="font-bold text-slate-300 mb-1">💡 Petunjuk:</p>
-              Klik pada visual grid di kiri untuk meletakkan Pin target rute A*. Orange Pi akan menerima koordinat ini dan meneruskannya ke paket navigasi ROS 2 Nav2.
+            <div className="p-3.5 rounded-lg bg-slate-950 text-[10px] leading-relaxed text-slate-400 border border-slate-800 space-y-1.5 animate-in fade-in duration-200">
+              <p className="font-bold text-slate-300 mb-1">💡 Petunjuk Penggunaan:</p>
+              <ol className="list-decimal list-inside space-y-1 text-justify">
+                <li>Klik pada area grid koordinat di sebelah kiri untuk meletakkan target perjalanan (tanda Pin merah).</li>
+                <li>Target koordinat (X, Y) dalam meter akan terhitung otomatis berdasarkan pusat titik awal (0.0, 0.0).</li>
+                <li>Klik tombol <span className="text-cyan-400 font-semibold">Kirim Navigasi (A*)</span> di bawah untuk mengirim data ke robot (Orange Pi). Robot akan otomatis merencanakan rute terpendek yang aman menghindari rintangan (menggunakan ROS 2 Nav2).</li>
+              </ol>
             </div>
           </div>
 

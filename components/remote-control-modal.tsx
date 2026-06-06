@@ -113,16 +113,25 @@ function RadarView({
       <div className="absolute top-4 left-4 z-20 font-mono text-xs flex flex-col gap-1">
         <div className="flex items-center gap-1.5">
           <span className={cn("w-2 h-2 rounded-full", lidarDistance !== null && !lidarError ? "bg-emerald-500 animate-pulse" : "bg-red-500")} />
-          <span style={{ color: `${C.neon}dd` }}>LiDAR SENSOR: {lidarError ? "ERROR" : "ACTIVE"}</span>
+          <span style={{ color: `${C.neon}dd` }}>Sensor Jarak (LiDAR): {lidarError ? "OFFLINE" : "AKTIF"}</span>
         </div>
         {lidarError ? (
           <span className="text-red-500 text-[10px] max-w-[180px] break-words">
-            Akses Ditolak (Cek Rules)
+            {lidarError.includes("permission-denied") || lidarError.includes("Akses Ditolak")
+              ? "Akses Ditolak (Perlu Hak Akses)"
+              : `Gagal tersambung: ${lidarError}`}
           </span>
         ) : lidarDistance !== null ? (
-          <span className={cn("text-base font-bold", isObstacleClose ? "text-red-500 animate-pulse" : "text-emerald-400")}>
-            {lidarDistance > 0 ? `${lidarDistance.toFixed(1)} cm` : "Tidak ada rintangan"}
-          </span>
+          <div className="flex flex-col">
+            <span className={cn("text-base font-bold", isObstacleClose ? "text-red-500 animate-pulse" : "text-emerald-400")}>
+              {lidarDistance > 0 ? `${lidarDistance.toFixed(1)} cm` : "Tidak ada rintangan"}
+            </span>
+            {isObstacleClose && (
+              <span className="text-red-500 text-[9px] font-bold animate-pulse">
+                ⚠️ PERINGATAN: Rintangan Sangat Dekat!
+              </span>
+            )}
+          </div>
         ) : (
           <span className="text-muted-foreground">Menghubungkan...</span>
         )}
@@ -462,7 +471,7 @@ export function RemoteControlModal({
             className="font-bold tracking-wider text-sm uppercase"
             style={{ color: C.neon }}
           >
-            Remote Control
+            Remote Control Robot (Manual)
           </span>
           {/* Sync indicator */}
           {isSyncing && (
@@ -528,7 +537,7 @@ export function RemoteControlModal({
             style={{ color: `${C.neon}33` }}
           >
             <Keyboard className="w-3 h-3" />
-            <span>Tahan Arrow Keys / WASD</span>
+            <span>Tahan tombol arah Panah / WASD di keyboard</span>
           </div>
         </div>
       </div>

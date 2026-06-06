@@ -109,7 +109,7 @@ export function NotificationToast({
 
       <div className="flex-1 min-w-0">
         <h4 className="font-bold text-sm capitalize mb-0.5">{type}</h4>
-        <p className="text-sm opacity-90 leading-relaxed break-words">
+        <p className="text-sm opacity-90 leading-relaxed break-words whitespace-pre-line">
           {message}
         </p>
       </div>

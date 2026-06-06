@@ -208,7 +208,7 @@ export function MaintenanceWidget({
       <div className="px-5 pb-4 space-y-2">
         <div className="flex justify-between items-center">
           <span className="text-xs font-medium text-muted-foreground">
-            Filter Integrity
+            Kesehatan & Integritas Filter
           </span>
           <span
             className={cn(
@@ -262,12 +262,12 @@ export function MaintenanceWidget({
           <div className="flex items-center gap-1.5">
             <Brain className="w-3.5 h-3.5 text-muted-foreground" />
             <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-              Prediksi ML
+              Prediksi AI / ML
             </span>
           </div>
           {isMLAvailable && confidence !== null && (
             <span className="text-[11px] text-muted-foreground">
-              Akurasi{" "}
+              Keyakinan AI (Akurasi){" "}
               <span className="font-semibold text-foreground">
                 {(confidence * 100).toFixed(0)}%
               </span>
@@ -281,10 +281,7 @@ export function MaintenanceWidget({
             <WifiOff className="w-4 h-4 text-muted-foreground shrink-0" />
             <div>
               <p className="text-xs font-semibold text-foreground">
-                ML Service Offline
-              </p>
-              <p className="text-[11px] text-muted-foreground mt-0.5">
-                Menggunakan analisis berbasis aturan
+                Sistem AI Offline
               </p>
             </div>
           </div>
@@ -342,6 +339,13 @@ export function MaintenanceWidget({
               {recommendation}
             </p>
           </div>
+        )}
+
+        {/* Footnote */}
+        {isMLAvailable && !isPredicting && (
+          <p className="text-[10px] text-muted-foreground leading-normal italic pl-1">
+            * Kecerdasan Buatan (AI) memprediksi sisa umur filter berdasarkan tingkat PM2.5 dan suhu lingkungan saat ini.
+          </p>
         )}
       </div>
 
