@@ -152,6 +152,101 @@ const CustomTooltip = ({ active, payload, label }: CustomTooltipProps) => {
   );
 };
 
+// Helper to downsample data points to prevent Recharts lag while maintaining the last data point
+function downsampleData(data: DataRow[], maxPoints: number): DataRow[] {
+  if (data.length <= maxPoints) return data;
+  const step = Math.ceil(data.length / maxPoints);
+  const result: DataRow[] = [];
+  for (let i = 0; i < data.length; i += step) {
+    result.push(data[i]);
+  }
+  // Ensure the last element is always included to show the latest state
+  const lastPoint = data[data.length - 1];
+  if (result.length > 0 && result[result.length - 1].timestamp !== lastPoint.timestamp) {
+    if (result.length >= maxPoints) {
+      result[result.length - 1] = lastPoint;
+    } else {
+      result.push(lastPoint);
+    }
+  }
+  return result;
+}
+
+// Helper to escape CSV cells to prevent Excel parsing bugs
+function escapeCSVCell(val: any): string {
+  const str = String(val ?? "");
+  if (/[",\n\r]/.test(str)) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
+}
+
+// Helper to format CSV date consistently across operating systems and locales
+function formatCSVDate(ts: number) {
+  const d = new Date(ts);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  const hh = String(d.getHours()).padStart(2, "0");
+  const min = String(d.getMinutes()).padStart(2, "0");
+  const ss = String(d.getSeconds()).padStart(2, "0");
+  return {
+    waktuPerekaman: `${yyyy}-${mm}-${dd} ${hh}:${min}:${ss}`,
+    tanggal: `${dd}/${mm}/${yyyy}`,
+    jam: `${hh}:${min}:${ss}`,
+  };
+}
+
+// Helper to generate simulated fallback data for different time ranges
+function generateSimulatedData(range: "1h" | "3d" | "7d"): DataRow[] {
+  const now = Date.now();
+  const data: DataRow[] = [];
+  if (range === "1h") {
+    // 60 points, one every 1 minute
+    for (let i = 59; i >= 0; i--) {
+      const ts = now - i * 60 * 1000;
+      const tFactor = ts / 100000;
+      data.push({
+        timestamp: ts,
+        pm25: Math.max(0, 12 + Math.sin(tFactor / 5) * 8 + Math.random() * 4),
+        pm10: Math.max(0, 18 + Math.cos(tFactor / 4) * 10 + Math.random() * 5),
+        co: Math.max(0, 5 + Math.sin(tFactor / 6) * 3 + Math.random() * 2),
+        voc: Math.max(0, 1.2 + Math.cos(tFactor / 5.5) * 0.4 + Math.random() * 0.3),
+        suhu: Math.max(15, Math.min(45, 26 + Math.sin(tFactor / 7) * 2 + Math.random() * 1)),
+      });
+    }
+  } else if (range === "3d") {
+    // 72 points, one every 1 hour
+    for (let i = 71; i >= 0; i--) {
+      const ts = now - i * 3600000;
+      const tFactor = ts / 3600000;
+      data.push({
+        timestamp: ts,
+        pm25: Math.max(0, 15 + Math.sin(tFactor / 6) * 5 + Math.random() * 4),
+        pm10: Math.max(0, 22 + Math.cos(tFactor / 8) * 8 + Math.random() * 5),
+        co: Math.max(0, 6 + Math.sin(tFactor / 12) * 3 + Math.random() * 2),
+        voc: Math.max(0, 1.5 + Math.cos(tFactor / 10) * 0.5 + Math.random() * 0.3),
+        suhu: Math.max(15, Math.min(45, 27 + Math.sin(tFactor / 24) * 3 + Math.random() * 1)),
+      });
+    }
+  } else {
+    // 7d: 168 points, one every 1 hour
+    for (let i = 167; i >= 0; i--) {
+      const ts = now - i * 3600000;
+      const tFactor = ts / 3600000;
+      data.push({
+        timestamp: ts,
+        pm25: Math.max(0, 14 + Math.sin(tFactor / 12) * 6 + Math.random() * 4),
+        pm10: Math.max(0, 20 + Math.cos(tFactor / 16) * 9 + Math.random() * 5),
+        co: Math.max(0, 5.5 + Math.sin(tFactor / 24) * 3 + Math.random() * 2),
+        voc: Math.max(0, 1.4 + Math.cos(tFactor / 20) * 0.5 + Math.random() * 0.3),
+        suhu: Math.max(15, Math.min(45, 26 + Math.sin(tFactor / 48) * 3 + Math.random() * 1)),
+      });
+    }
+  }
+  return data;
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function ChartSection() {
@@ -177,19 +272,28 @@ export function ChartSection() {
    */
   const csvBufferRef = useRef<DataRow[]>([]);
 
+  // ── High-resolution raw data ref for 1h sliding window ───────────────────
+  const fullRawDataRef = useRef<DataRow[]>([]);
+
+  // ── Recording status ref to prevent tearing down listeners ────────────────
+  const isRecordingRef = useRef(false);
+
+  // Sync the ref with state changes
+  useEffect(() => {
+    isRecordingRef.current = isRecording;
+  }, [isRecording]);
+
   // ── Cleanup refs ─────────────────────────────────────────────────────────
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const firebaseCleanupRef = useRef<(() => void) | null>(null);
 
   // ── 1. Load initial / historical data ────────────────────────────────────
   useEffect(() => {
-    const daysMap = { "1h": 0.04, "3d": 3, "7d": 7 };
+    const daysMap = { "1h": 1, "3d": 3, "7d": 7 };
 
     const loadData = async () => {
       try {
-        const firebaseData = await getHistoricalData(
-          Math.ceil(daysMap[timeRange]),
-        );
+        const firebaseData = await getHistoricalData(daysMap[timeRange]);
         if (firebaseData.length > 0) {
           const rows: DataRow[] = firebaseData.map((d) => ({
             timestamp: d.timestamp.getTime(),
@@ -199,33 +303,46 @@ export function ChartSection() {
             voc: d.voc,
             suhu: d.suhu,
           }));
-          const processed =
-            timeRange === "1h"
-              ? rows.slice(-50)
-              : rows.filter((_, i) => i % 6 === 0).slice(-50);
-          setChartData(processed);
+
+          // Sort chronologically
+          rows.sort((a, b) => a.timestamp - b.timestamp);
+
+          const now = Date.now();
+          if (timeRange === "1h") {
+            const oneHourAgo = now - 3600000;
+            let filtered = rows.filter((r) => r.timestamp >= oneHourAgo);
+            if (filtered.length === 0) {
+              // Fallback to last 50 historical points if no data in the last hour
+              filtered = rows.slice(-50);
+            }
+            fullRawDataRef.current = filtered;
+            setChartData(downsampleData(filtered, 120));
+          } else if (timeRange === "3d") {
+            const threeDaysAgo = now - 3 * 86400000;
+            const filtered = rows.filter((r) => r.timestamp >= threeDaysAgo);
+            setChartData(downsampleData(filtered, 150));
+          } else {
+            // 7d
+            const sevenDaysAgo = now - 7 * 86400000;
+            const filtered = rows.filter((r) => r.timestamp >= sevenDaysAgo);
+            setChartData(downsampleData(filtered, 150));
+          }
           setIsFirebaseConnected(true);
           return;
         }
-      } catch {
-        // fall through to simulated
+      } catch (err) {
+        console.error("Error loading historical data:", err);
       }
+
+      // Fallback to simulated data if Firebase has no data or fails
       setIsFirebaseConnected(false);
-      const sim = generateHistoricalData(Math.ceil(daysMap[timeRange]));
-      const processed =
-        timeRange === "1h"
-          ? sim.slice(-30)
-          : sim.filter((_, i) => i % 6 === 0).slice(-50);
-      setChartData(
-        processed.map((d) => ({
-          timestamp: d.timestamp.getTime(),
-          pm25: d.pm25,
-          pm10: d.pm10,
-          co: d.co,
-          voc: d.voc,
-          suhu: d.suhu,
-        })),
-      );
+      const simulated = generateSimulatedData(timeRange);
+      if (timeRange === "1h") {
+        fullRawDataRef.current = simulated;
+        setChartData(downsampleData(simulated, 120));
+      } else {
+        setChartData(downsampleData(simulated, 150));
+      }
     };
 
     loadData();
@@ -239,17 +356,20 @@ export function ChartSection() {
     if (timeRange !== "1h") return;
 
     const handleNewPoint = (row: DataRow) => {
-      // Update chart
-      setChartData((prev) => {
-        if (prev.length === 0) return prev;
-        return [...prev.slice(-49), row];
-      });
-
       // Append to CSV buffer if recording
-      if (isRecording) {
+      if (isRecordingRef.current) {
         csvBufferRef.current.push(row);
         setRecordedCount(csvBufferRef.current.length);
       }
+
+      // Update full raw data ref and slide window
+      const oneHourAgo = Date.now() - 3600000;
+      fullRawDataRef.current = [...fullRawDataRef.current, row].filter(
+        (r) => r.timestamp >= oneHourAgo,
+      );
+
+      // Downsample and update chart state
+      setChartData(downsampleData(fullRawDataRef.current, 120));
     };
 
     try {
@@ -267,23 +387,45 @@ export function ChartSection() {
         },
         () => {
           setIsFirebaseConnected(false);
-          // Simulated fallback
+          // Simulated fallback interval with functional update to prevent stale closures
           intervalRef.current = setInterval(() => {
-            const last = chartData[chartData.length - 1];
-            if (!last) return;
-            const row: DataRow = {
-              timestamp: Date.now(),
-              pm25: Math.max(0, last.pm25 + (Math.random() - 0.5) * 3),
-              pm10: Math.max(0, last.pm10 + (Math.random() - 0.5) * 4),
-              co: Math.max(0, last.co + (Math.random() - 0.5) * 0.5),
-              voc: Math.max(0, last.voc + (Math.random() - 0.5) * 0.3),
-              suhu: Math.max(0, last.suhu + (Math.random() - 0.5) * 0.5),
-            };
-            handleNewPoint(row);
+            setChartData((prev) => {
+              const last = prev[prev.length - 1] || {
+                timestamp: Date.now(),
+                pm25: 15,
+                pm10: 22,
+                co: 5.5,
+                voc: 1.2,
+                suhu: 26,
+              };
+              const row: DataRow = {
+                timestamp: Date.now(),
+                pm25: Math.max(0, last.pm25 + (Math.random() - 0.5) * 3),
+                pm10: Math.max(0, last.pm10 + (Math.random() - 0.5) * 4),
+                co: Math.max(0, last.co + (Math.random() - 0.5) * 0.1),
+                voc: Math.max(0, last.voc + (Math.random() - 0.5) * 0.05),
+                suhu: Math.max(15, Math.min(45, last.suhu + (Math.random() - 0.5) * 0.2)),
+              };
+
+              // Append to CSV buffer if recording
+              if (isRecordingRef.current) {
+                csvBufferRef.current.push(row);
+                setRecordedCount(csvBufferRef.current.length);
+              }
+
+              // Update raw ref and slide window
+              const oneHourAgo = Date.now() - 3600000;
+              fullRawDataRef.current = [...fullRawDataRef.current, row].filter(
+                (r) => r.timestamp >= oneHourAgo,
+              );
+
+              return downsampleData(fullRawDataRef.current, 120);
+            });
           }, 3000);
         },
       );
-    } catch {
+    } catch (err) {
+      console.error("Error subscribing to sensor data:", err);
       setIsFirebaseConnected(false);
     }
 
@@ -292,7 +434,7 @@ export function ChartSection() {
       if (firebaseCleanupRef.current) firebaseCleanupRef.current();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [timeRange, isRecording]);
+  }, [timeRange]);
 
   // ── Recording controls ────────────────────────────────────────────────────
 
@@ -309,33 +451,37 @@ export function ChartSection() {
     if (rows.length === 0) return;
 
     const header = [
-      "Timestamp",
+      "No",
+      "Waktu Perekaman (WIB)",
       "Tanggal",
-      "Waktu",
+      "Jam",
       "PM2.5 (μg/m³)",
       "PM10 (μg/m³)",
       "CO (ppm)",
       "VOC (ppm)",
       "Suhu (°C)",
-      "Sumber",
+      "Sumber Data",
     ];
-    const body = rows.map((r) => {
-      const d = new Date(r.timestamp);
+
+    const body = rows.map((r, idx) => {
+      const { waktuPerekaman, tanggal, jam } = formatCSVDate(r.timestamp);
       return [
-        r.timestamp,
-        d.toLocaleDateString("id-ID"),
-        d.toLocaleTimeString("id-ID"),
-        r.pm25.toFixed(2),
-        r.pm10.toFixed(2),
-        r.co.toFixed(2),
-        r.voc.toFixed(2),
-        r.suhu.toFixed(2),
-        isFirebaseConnected ? "Firebase" : "Simulasi",
+        escapeCSVCell(idx + 1),
+        escapeCSVCell(waktuPerekaman),
+        escapeCSVCell(tanggal),
+        escapeCSVCell(jam),
+        escapeCSVCell(r.pm25.toFixed(2)),
+        escapeCSVCell(r.pm10.toFixed(2)),
+        escapeCSVCell(r.co.toFixed(2)),
+        escapeCSVCell(r.voc.toFixed(2)),
+        escapeCSVCell(r.suhu.toFixed(2)),
+        escapeCSVCell(isFirebaseConnected ? "Firebase" : "Simulasi"),
       ];
     });
 
-    const csv = [header, ...body].map((row) => row.join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const csvContent = "sep=,\n" + [header, ...body].map((row) => row.join(",")).join("\n");
+    // Prepend UTF-8 BOM for Microsoft Excel compatibility
+    const blob = new Blob(["\ufeff" + csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -349,74 +495,90 @@ export function ChartSection() {
     setRecordedCount(0);
   }, [isFirebaseConnected]);
 
+  // Automatically export and stop recording if user switches time range
+  useEffect(() => {
+    if (timeRange !== "1h" && isRecordingRef.current) {
+      stopAndExport();
+    }
+  }, [timeRange, stopAndExport]);
+
   // Export snapshot (historical / non-live)
   const exportSnapshot = useCallback(async () => {
-    const daysMap = { "1h": 0, "3d": 3, "7d": 7 };
+    const daysMap = { "1h": 1, "3d": 3, "7d": 7 };
     let rows: DataRow[] = [];
+    let isSnapshotFirebase = isFirebaseConnected;
 
     if (timeRange === "1h") {
-      rows = [...chartData];
+      rows = [...fullRawDataRef.current];
     } else {
       try {
         const fb = await getHistoricalData(daysMap[timeRange]);
-        rows =
-          fb.length > 0
-            ? fb.map((d) => ({
-                timestamp: d.timestamp.getTime(),
-                pm25: d.pm25,
-                pm10: d.pm10,
-                co: d.co,
-                voc: d.voc,
-                suhu: d.suhu,
-              }))
-            : generateHistoricalData(daysMap[timeRange]).map((d) => ({
-                timestamp: d.timestamp.getTime(),
-                pm25: d.pm25,
-                pm10: d.pm10,
-                co: d.co,
-                voc: d.voc,
-                suhu: d.suhu,
-              }));
-      } catch {
-        rows = generateHistoricalData(daysMap[timeRange]).map((d) => ({
-          timestamp: d.timestamp.getTime(),
-          pm25: d.pm25,
-          pm10: d.pm10,
-          co: d.co,
-          voc: d.voc,
-          suhu: d.suhu,
-        }));
+        if (fb.length > 0) {
+          rows = fb.map((d) => ({
+            timestamp: d.timestamp.getTime(),
+            pm25: d.pm25,
+            pm10: d.pm10,
+            co: d.co,
+            voc: d.voc,
+            suhu: d.suhu,
+          }));
+          isSnapshotFirebase = true;
+        } else {
+          rows = generateSimulatedData(timeRange);
+          isSnapshotFirebase = false;
+        }
+      } catch (err) {
+        console.error("Error fetching historical data for export:", err);
+        rows = generateSimulatedData(timeRange);
+        isSnapshotFirebase = false;
       }
     }
 
+    // Sort chronologically
     rows.sort((a, b) => a.timestamp - b.timestamp);
 
+    // Filter to range limit
+    const now = Date.now();
+    let timeLimit = now - 7 * 86400000;
+    if (timeRange === "1h") {
+      timeLimit = now - 3600000;
+    } else if (timeRange === "3d") {
+      timeLimit = now - 3 * 86400000;
+    }
+    const filteredRows = rows.filter((r) => r.timestamp >= timeLimit);
+
     const header = [
-      "Timestamp",
+      "No",
+      "Waktu Perekaman (WIB)",
       "Tanggal",
-      "Waktu",
+      "Jam",
       "PM2.5 (μg/m³)",
       "PM10 (μg/m³)",
       "CO (ppm)",
       "VOC (ppm)",
       "Suhu (°C)",
+      "Sumber Data",
     ];
-    const body = rows.map((r) => {
-      const d = new Date(r.timestamp);
+
+    const body = filteredRows.map((r, idx) => {
+      const { waktuPerekaman, tanggal, jam } = formatCSVDate(r.timestamp);
       return [
-        r.timestamp,
-        d.toLocaleDateString("id-ID"),
-        d.toLocaleTimeString("id-ID"),
-        r.pm25.toFixed(2),
-        r.pm10.toFixed(2),
-        r.co.toFixed(2),
-        r.voc.toFixed(2),
-        r.suhu.toFixed(2),
+        escapeCSVCell(idx + 1),
+        escapeCSVCell(waktuPerekaman),
+        escapeCSVCell(tanggal),
+        escapeCSVCell(jam),
+        escapeCSVCell(r.pm25.toFixed(2)),
+        escapeCSVCell(r.pm10.toFixed(2)),
+        escapeCSVCell(r.co.toFixed(2)),
+        escapeCSVCell(r.voc.toFixed(2)),
+        escapeCSVCell(r.suhu.toFixed(2)),
+        escapeCSVCell(isSnapshotFirebase ? "Firebase" : "Simulasi"),
       ];
     });
 
-    const csv = [header, ...body].map((row) => row.join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const csvContent = "sep=,\n" + [header, ...body].map((row) => row.join(",")).join("\n");
+    // Prepend UTF-8 BOM for Microsoft Excel compatibility
+    const blob = new Blob(["\ufeff" + csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -425,7 +587,7 @@ export function ChartSection() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-  }, [timeRange, chartData]);
+  }, [timeRange, isFirebaseConnected]);
 
   // ── Helpers ───────────────────────────────────────────────────────────────
 
