@@ -24,7 +24,7 @@ import { MobileNav } from "@/components/mobile-nav";
 import { cn } from "@/lib/utils";
 
 export default function Dashboard({ user }: { user: User }) {
-  const sensorData = useSensorData(3000);
+  const { data: sensorData, isLoading: isSensorLoading } = useSensorData(3000);
 
   const {
     healthPct,
@@ -37,6 +37,7 @@ export default function Dashboard({ user }: { user: User }) {
     confidence,
     isMLAvailable,
     isPredicting,
+    error,
   } = useMLFilterEstimation();
 
   const [notification, setNotification] = useState<{
@@ -161,12 +162,28 @@ export default function Dashboard({ user }: { user: User }) {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 py-6 md:py-8 pb-24 md:pb-10 space-y-6">
         {/* ── Welcome Header ── */}
-        <div className="flex items-center justify-between gap-4 animate-in slide-in-from-top-4 duration-500">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-foreground tracking-tight">
+        <div className="flex items-center justify-between gap-2 sm:gap-4 animate-in slide-in-from-top-4 duration-500">
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-foreground tracking-tight truncate">
               Halo, <span className="text-primary">{firstName}</span> 👋
             </h1>
-            <p className="text-sm text-muted-foreground mt-1">{today}</p>
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 mt-0.5 sm:mt-1 flex-wrap">
+              <p className="text-xs sm:text-sm text-muted-foreground truncate">{today}</p>
+              {(sensorData.battery === 0 || sensorData.suhu >= 33.0) && (
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {sensorData.battery === 0 && (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full border border-red-500/20 bg-red-500/10 text-[10px] font-bold text-red-600 dark:text-red-400 animate-pulse">
+                      ⚠ Baterai kritis (0%)
+                    </span>
+                  )}
+                  {sensorData.suhu >= 33.0 && (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full border border-amber-500/20 bg-amber-500/10 text-[10px] font-bold text-amber-600 dark:text-amber-400">
+                      ⚠ Suhu sensor tinggi ({sensorData.suhu.toFixed(1)}°C)
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Right side: air quality status */}
@@ -174,7 +191,7 @@ export default function Dashboard({ user }: { user: User }) {
             {/* Air Quality Status Pill */}
             <div
               className={cn(
-                "flex items-center gap-2.5 px-4 py-2.5 rounded-2xl border backdrop-blur-sm shadow-sm transition-colors duration-500",
+                "flex items-center gap-1.5 sm:gap-2.5 px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl sm:rounded-2xl border backdrop-blur-sm shadow-sm transition-colors duration-500",
                 sc.classes,
               )}
             >
@@ -185,7 +202,7 @@ export default function Dashboard({ user }: { user: User }) {
                   {sc.sublabel}
                 </p>
               </div>
-              <span className="sm:hidden text-xs font-bold">{sc.label}</span>
+              <span className="sm:hidden text-[10px] sm:text-xs font-bold">{sc.label}</span>
             </div>
           </div>
         </div>
@@ -202,6 +219,7 @@ export default function Dashboard({ user }: { user: User }) {
               unit="μg/m³"
               type="PM2_5"
               icon={<Wind className="w-4 h-4" />}
+              isLoading={isSensorLoading}
             />
             <SensorCard
               label="PM10"
@@ -209,6 +227,7 @@ export default function Dashboard({ user }: { user: User }) {
               unit="μg/m³"
               type="PM10"
               icon={<Droplets className="w-4 h-4" />}
+              isLoading={isSensorLoading}
             />
             <SensorCard
               label="CO"
@@ -216,6 +235,7 @@ export default function Dashboard({ user }: { user: User }) {
               unit="ppm"
               type="CO"
               icon={<Flame className="w-4 h-4" />}
+              isLoading={isSensorLoading}
             />
             <SensorCard
               label="VOC"
@@ -223,6 +243,7 @@ export default function Dashboard({ user }: { user: User }) {
               unit="ppm"
               type="VOC"
               icon={<Leaf className="w-4 h-4" />}
+              isLoading={isSensorLoading}
             />
           </div>
         </div>
@@ -249,6 +270,7 @@ export default function Dashboard({ user }: { user: User }) {
                 confidence={confidence}
                 isMLAvailable={isMLAvailable}
                 isPredicting={isPredicting}
+                error={error}
               />
             </div>
           </aside>
@@ -295,6 +317,7 @@ export default function Dashboard({ user }: { user: User }) {
                 confidence={confidence}
                 isMLAvailable={isMLAvailable}
                 isPredicting={isPredicting}
+                error={error}
               />
             </div>
           </div>

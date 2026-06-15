@@ -44,17 +44,17 @@ const SPEED_CONFIG: Record<
     label: "Low",
     desc: "Rendah",
     color:
-      "border-border text-muted-foreground hover:border-blue-400 hover:text-blue-700 dark:hover:text-blue-300",
+      "border-border text-muted-foreground hover:border-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300",
     active:
-      "border-blue-500 bg-blue-500 text-white shadow-md shadow-blue-500/25",
+      "border-emerald-500 bg-emerald-500 text-white shadow-md shadow-emerald-500/25",
   },
   normal: {
     label: "Normal",
     desc: "Sedang",
     color:
-      "border-border text-muted-foreground hover:border-cyan-400 hover:text-cyan-700 dark:hover:text-cyan-300",
+      "border-border text-muted-foreground hover:border-amber-400 hover:text-amber-700 dark:hover:text-amber-300",
     active:
-      "border-cyan-500 bg-cyan-500 text-white shadow-md shadow-cyan-500/25",
+      "border-amber-500 bg-amber-500 text-white shadow-md shadow-amber-500/25",
   },
   high: {
     label: "High",
@@ -188,8 +188,8 @@ export function ControlsSection({
                 </div>
                 <p className="text-[11px] text-muted-foreground mt-0.5">
                   {isAutoMode
-                    ? `Otomatis · Rekomendasi: ${recommendedSpeed.toUpperCase()}`
-                    : "Mode manual aktif"}
+                    ? `Mode Auto · Kecepatan: ${fanSpeed.toUpperCase()} (Rekomendasi)`
+                    : `Mode Manual · Kecepatan: ${fanSpeed.toUpperCase()}`}
                 </p>
               </div>
             </div>
@@ -205,28 +205,6 @@ export function ControlsSection({
                 disabled={isSyncing}
                 className="data-[state=checked]:bg-emerald-500"
               />
-            </div>
-          </div>
-
-          {/* Current speed display */}
-          <div className="flex items-center justify-between p-3 rounded-xl bg-muted/40 border border-border/50 mb-4">
-            <div>
-              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-0.5">
-                Kecepatan Saat Ini
-              </p>
-              <p className="text-base font-bold text-foreground">
-                {fanSpeed === "off"
-                  ? "Mati"
-                  : `${SPEED_CONFIG[fanSpeed].desc} (${fanSpeed.toUpperCase()})`}
-              </p>
-            </div>
-            <div className="text-right">
-              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-0.5">
-                Rekomendasi
-              </p>
-              <p className="text-sm font-semibold text-primary">
-                {recommendedSpeed.toUpperCase()}
-              </p>
             </div>
           </div>
 
@@ -251,19 +229,19 @@ export function ControlsSection({
                     onClick={() => handleManualChange(speed)}
                     disabled={isAutoMode || isSyncing}
                     className={cn(
-                      "flex flex-col items-center justify-center py-3.5 rounded-xl border-2 transition-all duration-200 min-h-[72px] gap-1",
+                      "flex flex-col items-center justify-center py-2 sm:py-3.5 rounded-xl border-2 transition-all duration-200 min-h-[64px] sm:min-h-[72px] gap-0.5 sm:gap-1",
                       isActive ? cfg.active : cn("bg-card", cfg.color),
                     )}
                   >
                     {speed !== "off" && (
                       <Wind
                         className={cn(
-                          "w-4 h-4",
+                          "w-3.5 h-3.5 sm:w-4 sm:h-4",
                           isActive ? "opacity-90" : "opacity-50",
                         )}
                       />
                     )}
-                    <span className="text-[11px] font-bold uppercase tracking-wide">
+                    <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wide">
                       {cfg.label}
                     </span>
                   </button>

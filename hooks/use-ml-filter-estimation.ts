@@ -73,8 +73,8 @@ function isCacheValid(
 export function useMLFilterEstimation(): MLFilterEstimationResult {
   // ── 8.1 State initialization ──────────────────────────────────────────────
 
-  const sensorData = useSensorData();
-  const { healthPct, daysRemaining, resetFilter, isLoading } =
+  const { data: sensorData } = useSensorData();
+  const { healthPct, daysRemaining, resetFilter, isLoading, error: estimationError } =
     useFilterEstimation();
 
   const [mlStatus, setMlStatus] = useState<FilterStatus | null>(null);
@@ -136,7 +136,12 @@ export function useMLFilterEstimation(): MLFilterEstimationResult {
         sensorData.suhu,
       ].some((v) => !isFinite(v) || isNaN(v));
 
-      if (allZero || hasInvalidValue) {
+      if (hasInvalidValue) {
+        setError("Nilai pembacaan sensor tidak valid (NaN/Infinity). Silakan periksa koneksi sensor.");
+        return;
+      }
+
+      if (allZero) {
         return;
       }
 
@@ -199,7 +204,7 @@ export function useMLFilterEstimation(): MLFilterEstimationResult {
     confidence,
     isMLAvailable,
     isPredicting,
-    error,
+    error: error || estimationError,
 
     // From useFilterEstimation (never null)
     healthPct,

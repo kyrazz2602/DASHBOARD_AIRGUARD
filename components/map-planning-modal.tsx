@@ -22,6 +22,7 @@ export function MapPlanningModal({ isOpen, onClose }: MapPlanningModalProps) {
   const [selectedPoint, setSelectedPoint] = useState<{ x: number; y: number } | null>(null);
   const [isSending, setIsSending] = useState(false);
   const [sentStatus, setSentStatus] = useState<"idle" | "success" | "error">("idle");
+  const [isInstructionsOpen, setIsInstructionsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Reset states and set autonomous mode when opened
@@ -30,6 +31,12 @@ export function MapPlanningModal({ isOpen, onClose }: MapPlanningModalProps) {
       setNavigationMode(true).catch((err) => {
         console.error("[MapPlanning] Failed to set autonomous navigation mode:", err);
       });
+      // Buka petunjuk secara default hanya di layar desktop
+      if (typeof window !== "undefined" && window.innerWidth >= 1024) {
+        setIsInstructionsOpen(true);
+      } else {
+        setIsInstructionsOpen(false);
+      }
     } else {
       setSelectedPoint(null);
       setSentStatus("idle");
@@ -125,10 +132,10 @@ export function MapPlanningModal({ isOpen, onClose }: MapPlanningModalProps) {
       </div>
 
       {/* Body */}
-      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
+      <div className="flex-1 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden">
         {/* Interactive Grid Map */}
-        <div className="flex-1 w-full min-h-[45vh] lg:min-h-0 relative flex items-center justify-center p-6 select-none bg-slate-950/20">
-          <div className="relative w-full max-w-[480px] aspect-square rounded-2xl border border-slate-800 bg-black/40 overflow-hidden shadow-2xl">
+        <div className="flex-1 w-full min-h-[35vh] lg:min-h-0 relative flex items-center justify-center p-4 lg:p-6 select-none bg-slate-950/20">
+          <div className="relative w-full max-w-[400px] lg:max-w-[480px] aspect-square rounded-2xl border border-slate-800 bg-black/40 overflow-hidden shadow-2xl">
             {/* Grid Pattern */}
             <div
               className="absolute inset-0"
@@ -179,59 +186,66 @@ export function MapPlanningModal({ isOpen, onClose }: MapPlanningModalProps) {
 
         {/* Sidebar Info Panel */}
         <div
-          className="px-5 py-6 flex flex-col justify-between gap-6 shrink-0 lg:w-80 border-t lg:border-t-0 lg:border-l"
+          className="p-4 lg:px-5 lg:py-6 flex flex-col justify-between gap-4 lg:gap-6 shrink-0 lg:w-80 border-t lg:border-t-0 lg:border-l"
           style={{ background: C.bgAlt, borderColor: `${C.neon}18` }}
         >
           <div className="space-y-4">
             <div className="space-y-1">
-              <h3 className="text-sm font-bold text-foreground uppercase tracking-wider">Navigasi Rute Otomatis</h3>
-              <p className="text-xs text-muted-foreground">
-                Tentukan target koordinat perjalanan robot pada area 2D di sebelah kiri.
+              <h3 className="text-xs lg:text-sm font-bold text-foreground uppercase tracking-wider">Navigasi Rute Otomatis</h3>
+              <p className="text-[11px] lg:text-xs text-muted-foreground">
+                Tentukan target koordinat perjalanan robot pada area 2D <span className="hidden lg:inline">di sebelah kiri</span><span className="lg:hidden">di atas</span>.
               </p>
             </div>
 
             {/* Coordinates Display Card */}
-            <div className="p-4 rounded-xl bg-slate-900/50 border border-slate-800 space-y-3">
-              <div className="flex justify-between items-center text-xs">
+            <div className="p-3 lg:p-4 rounded-xl bg-slate-900/50 border border-slate-800 space-y-2 lg:space-y-3">
+              <div className="flex justify-between items-center text-[10px] lg:text-xs">
                 <span className="text-muted-foreground font-mono">Coordinate (Meter)</span>
-                <span className="text-[10px] uppercase font-bold text-slate-500">Origin: (0.0, 0.0)</span>
+                <span className="text-[9px] lg:text-[10px] uppercase font-bold text-slate-500 font-sans">Origin: (0.0, 0.0)</span>
               </div>
               <div className="grid grid-cols-2 gap-2 text-center">
-                <div className="p-2 rounded-lg bg-black/30 border border-slate-800">
-                  <p className="text-[10px] text-muted-foreground font-bold uppercase">Target X</p>
-                  <p className="text-base font-mono font-bold text-white">
+                <div className="p-1.5 lg:p-2 rounded-lg bg-black/30 border border-slate-800">
+                  <p className="text-[9px] lg:text-[10px] text-muted-foreground font-bold uppercase">Target X</p>
+                  <p className="text-sm lg:text-base font-mono font-bold text-white">
                     {selectedPoint ? `${selectedPoint.x.toFixed(2)} m` : "—"}
                   </p>
                 </div>
-                <div className="p-2 rounded-lg bg-black/30 border border-slate-800">
-                  <p className="text-[10px] text-muted-foreground font-bold uppercase">Target Y</p>
-                  <p className="text-base font-mono font-bold text-white">
+                <div className="p-1.5 lg:p-2 rounded-lg bg-black/30 border border-slate-800">
+                  <p className="text-[9px] lg:text-[10px] text-muted-foreground font-bold uppercase">Target Y</p>
+                  <p className="text-sm lg:text-base font-mono font-bold text-white">
                     {selectedPoint ? `${selectedPoint.y.toFixed(2)} m` : "—"}
                   </p>
                 </div>
               </div>
             </div>
 
-            {/* Instruction Alert */}
-            <div className="p-3.5 rounded-lg bg-slate-950 text-[10px] leading-relaxed text-slate-400 border border-slate-800 space-y-1.5 animate-in fade-in duration-200">
-              <p className="font-bold text-slate-300 mb-1">💡 Petunjuk Penggunaan:</p>
-              <ol className="list-decimal list-inside space-y-1 text-justify">
-                <li>Klik pada area grid koordinat di sebelah kiri untuk meletakkan target perjalanan (tanda Pin merah).</li>
+            {/* Instruction Alert (Collapsible details element for better mobile UX) */}
+            <details
+              open={isInstructionsOpen}
+              onToggle={(e) => setIsInstructionsOpen(e.currentTarget.open)}
+              className="group p-3 rounded-lg bg-slate-950/60 border border-slate-800 text-[10px] text-slate-400 select-none transition-all duration-200"
+            >
+              <summary className="font-bold text-slate-300 cursor-pointer flex items-center justify-between outline-none">
+                <span className="flex items-center gap-1">💡 Petunjuk Penggunaan</span>
+                <span className="transition-transform duration-200 text-[8px] text-slate-500 group-open:rotate-180">▼</span>
+              </summary>
+              <ol className="list-decimal list-inside mt-2 space-y-1.5 text-justify leading-relaxed">
+                <li>Klik pada area grid koordinat <span className="hidden lg:inline">di sebelah kiri</span><span className="lg:hidden">di atas</span> untuk meletakkan target perjalanan (tanda Pin merah).</li>
                 <li>Target koordinat (X, Y) dalam meter akan terhitung otomatis berdasarkan pusat titik awal (0.0, 0.0).</li>
                 <li>Klik tombol <span className="text-cyan-400 font-semibold">Kirim Navigasi (A*)</span> di bawah untuk mengirim data ke robot (Orange Pi). Robot akan otomatis merencanakan rute terpendek yang aman menghindari rintangan (menggunakan ROS 2 Nav2).</li>
               </ol>
-            </div>
+            </details>
           </div>
 
-          <div className="space-y-3">
+          <div className="space-y-2 lg:space-y-3 mt-auto">
             {/* Status alerts */}
             {sentStatus === "success" && (
-              <div className="p-3 rounded-lg bg-emerald-950/30 border border-emerald-800/50 text-emerald-400 text-xs font-mono text-center">
+              <div className="p-2.5 rounded-lg bg-emerald-950/30 border border-emerald-800/50 text-emerald-400 text-[11px] font-mono text-center">
                 ✓ Navigasi terkirim ke Orange Pi!
               </div>
             )}
             {sentStatus === "error" && (
-              <div className="p-3 rounded-lg bg-red-950/30 border border-red-800/50 text-red-400 text-xs font-mono text-center">
+              <div className="p-2.5 rounded-lg bg-red-950/30 border border-red-800/50 text-red-400 text-[11px] font-mono text-center">
                 ✗ Gagal mengirim koordinat.
               </div>
             )}
@@ -241,7 +255,7 @@ export function MapPlanningModal({ isOpen, onClose }: MapPlanningModalProps) {
               onClick={handleSendGoal}
               disabled={!selectedPoint || isSending}
               className={cn(
-                "w-full py-3 px-4 rounded-xl flex items-center justify-center gap-2 font-bold text-sm tracking-wide transition-all duration-200 border-0",
+                "w-full py-2.5 lg:py-3 px-4 rounded-xl flex items-center justify-center gap-2 font-bold text-xs lg:text-sm tracking-wide transition-all duration-200 border-0",
                 selectedPoint
                   ? "bg-cyan-500 hover:bg-cyan-400 text-black shadow-lg shadow-cyan-500/25"
                   : "bg-slate-800 text-slate-500 cursor-not-allowed"
@@ -249,12 +263,12 @@ export function MapPlanningModal({ isOpen, onClose }: MapPlanningModalProps) {
             >
               {isSending ? (
                 <>
-                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
                   Mengirim Rute...
                 </>
               ) : (
                 <>
-                  <Navigation className="w-4 h-4 fill-current" />
+                  <Navigation className="w-3.5 h-3.5 fill-current" />
                   Kirim Navigasi (A*)
                 </>
               )}

@@ -108,10 +108,18 @@ export function useFilterEstimation() {
     }
   }, []);
 
+  const error = useMemo(() => {
+    if (filterStartDate !== null && filterStartDate > Date.now()) {
+      return "Tanggal instalasi filter berada di masa depan. Harap sesuaikan waktu sistem Anda atau reset filter.";
+    }
+    return null;
+  }, [filterStartDate]);
+
   return {
     healthPct: estimation.healthPct,
     daysRemaining: estimation.daysRemaining,
     resetFilter,
-    isLoading
+    isLoading,
+    error
   };
 }

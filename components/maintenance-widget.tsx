@@ -35,6 +35,7 @@ interface MaintenanceWidgetProps {
   confidence?: number | null;
   isMLAvailable?: boolean;
   isPredicting?: boolean;
+  error?: string | null;
 }
 
 export function MaintenanceWidget({
@@ -51,6 +52,7 @@ export function MaintenanceWidget({
   confidence = null,
   isMLAvailable = false,
   isPredicting = false,
+  error = null,
 }: MaintenanceWidgetProps) {
   const filterStatus = useMemo(() => {
     if (filterHealth > 70) {
@@ -70,9 +72,9 @@ export function MaintenanceWidget({
         label: "Perlu Perhatian",
         sublabel: "Efisiensi menurun",
         styles: {
-          icon: "text-orange-700 dark:text-orange-300 bg-orange-100 dark:bg-orange-900/40",
-          text: "text-orange-700 dark:text-orange-300",
-          bar: "bg-gradient-to-r from-orange-500 to-orange-600",
+          icon: "text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/40",
+          text: "text-amber-700 dark:text-amber-300",
+          bar: "bg-gradient-to-r from-amber-500 to-amber-600",
         },
       };
     } else {
@@ -90,7 +92,7 @@ export function MaintenanceWidget({
   }, [filterHealth]);
 
   const batteryConfig = useMemo(() => {
-    if (batteryLevel > 60)
+    if (batteryLevel > 50)
       return {
         icon: <BatteryFull className="w-4 h-4" />,
         color: "text-emerald-700 dark:text-emerald-300",
@@ -99,8 +101,8 @@ export function MaintenanceWidget({
     if (batteryLevel > 20)
       return {
         icon: <BatteryMedium className="w-4 h-4" />,
-        color: "text-orange-700 dark:text-orange-300",
-        bg: "bg-orange-100 dark:bg-orange-900/40",
+        color: "text-amber-700 dark:text-amber-300",
+        bg: "bg-amber-100 dark:bg-amber-900/40",
       };
     return {
       icon: <BatteryLow className="w-4 h-4" />,
@@ -123,8 +125,8 @@ export function MaintenanceWidget({
         return {
           label: "Perhatian",
           styles:
-            "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300",
-          text: "text-orange-700 dark:text-orange-300",
+            "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300",
+          text: "text-amber-700 dark:text-amber-300",
         };
       case "Ganti Filter":
         return {
@@ -146,10 +148,10 @@ export function MaintenanceWidget({
         text: "text-emerald-700 dark:text-emerald-300",
       },
       {
-        label: "Perhatian",
+        label: "Perlu Perhatian",
         value: probabilities.perhatian,
-        bar: "bg-orange-600 dark:bg-orange-400",
-        text: "text-orange-700 dark:text-orange-300",
+        bar: "bg-amber-600 dark:bg-amber-400",
+        text: "text-amber-700 dark:text-amber-300",
       },
       {
         label: "Ganti Filter",
@@ -275,6 +277,21 @@ export function MaintenanceWidget({
           )}
         </div>
 
+        {/* Error notification */}
+        {error && (
+          <div className="flex items-start gap-2.5 p-3 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive animate-in fade-in slide-in-from-top-1 duration-200">
+            <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+            <div className="space-y-0.5">
+              <p className="text-xs font-bold leading-none">
+                Peringatan Sistem
+              </p>
+              <p className="text-[10px] opacity-90 leading-normal">
+                {error}
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* ML offline */}
         {!isMLAvailable && (
           <div className="flex items-center gap-2.5 p-3 rounded-xl bg-muted/60 border border-border">
@@ -344,7 +361,7 @@ export function MaintenanceWidget({
         {/* Footnote */}
         {isMLAvailable && !isPredicting && (
           <p className="text-[10px] text-muted-foreground leading-normal italic pl-1">
-            * Kecerdasan Buatan (AI) memprediksi sisa umur filter berdasarkan tingkat PM2.5 dan suhu lingkungan saat ini.
+            * Model Random Forest memprediksi status kelayakan filter berdasarkan parameter PM2.5, PM10, CO, VOC, Suhu, serta riwayat polusi secara real-time.
           </p>
         )}
       </div>

@@ -6,6 +6,7 @@ then serves predictions via POST /predict.
 """
 
 import logging
+import os
 import sys
 import time
 from contextlib import asynccontextmanager
@@ -18,6 +19,13 @@ from pydantic import BaseModel
 
 from model_loader import ModelLoader
 
+try:
+    import psycopg2
+    PSYCOPG2_AVAILABLE = True
+except ImportError:
+    PSYCOPG2_AVAILABLE = False
+
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -27,12 +35,23 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
+class HistoryItem(BaseModel):
+    pm25: float
+    pm10: float
+    co: float
+    voc: float
+    suhu: float
+    timestamp: str | None = None
+
+
 class PredictRequest(BaseModel):
     pm25: float
     pm10: float
     co: float
     voc: float
     suhu: float
+    timestamp: str | None = None
+    history: list[HistoryItem] | None = None
 
 
 class PredictResponse(BaseModel):
@@ -42,6 +61,100 @@ class PredictResponse(BaseModel):
     confidence: float
     model_used: str
     latency_ms: float
+
+
+# ---------------------------------------------------------------------------
+# Sliding history and feature engineering
+# ---------------------------------------------------------------------------
+from collections import deque
+import threading
+
+# Thread-safe in-memory sliding history of recent sensor readings (max 10 items)
+history_lock = threading.Lock()
+sensor_history_queue = deque(maxlen=10)
+
+FEATURE_COLS = [
+    "PM25", "PM10", "CO", "VOC", "Suhu", "Hour", "TimeMin",
+    "PM25_roll_mean", "PM25_roll_std", "PM25_roll_max",
+    "PM10_roll_mean", "PM10_roll_std", "PM10_roll_max",
+    "CO_roll_mean", "CO_roll_std", "CO_roll_max",
+    "VOC_roll_mean", "VOC_roll_std", "VOC_roll_max",
+    "PM25_PM10_ratio", "CO_VOC_ratio",
+    "PM25_exceed", "PM10_exceed", "CO_exceed", "VOC_exceed", "Total_exceed",
+    "CPI", "Cumulative_Exposure"
+]
+
+
+def compute_features(history_df: pd.DataFrame) -> pd.DataFrame:
+    df = history_df.copy()
+    
+    # Ensure correct column naming (handle potential lowercase / uppercase discrepancies)
+    name_mapping = {
+        "pm25": "PM25",
+        "pm10": "PM10",
+        "co": "CO",
+        "voc": "VOC",
+        "suhu": "Suhu"
+    }
+    df = df.rename(columns=lambda x: name_mapping.get(x.lower(), x))
+    
+    # Fill in default values if columns are missing
+    for col in ["PM25", "PM10", "CO", "VOC", "Suhu"]:
+        if col not in df.columns:
+            df[col] = 0.0
+        df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0.0)
+        
+    # Process Datetime
+    if "timestamp" in df.columns:
+        df["Datetime"] = pd.to_datetime(df["timestamp"], errors="coerce")
+    else:
+        df["Datetime"] = pd.NaT
+        
+    now = pd.Timestamp.now()
+    df["Datetime"] = df["Datetime"].fillna(now)
+    
+    df["Hour"] = df["Datetime"].dt.hour
+    df["Minute"] = df["Datetime"].dt.minute
+    df["TimeMin"] = df["Hour"] * 60 + df["Minute"]
+    
+    # WHO Standards
+    WHO = {
+        "PM25" : {"safe": 35.4,  "warning": 125.4, "danger": 125.5},
+        "PM10" : {"safe": 154.0, "warning": 354.0, "danger": 355.0},
+        "CO"   : {"safe": 15.0,  "warning": 50.0,  "danger": 50.0},
+        "VOC"  : {"safe": 20.0,  "warning": 100.0, "danger": 100.0},
+    }
+    
+    # Rolling Statistics
+    for col in ["PM25", "PM10", "CO", "VOC"]:
+        df[f"{col}_roll_mean"] = df[col].rolling(10, min_periods=1).mean()
+        df[f"{col}_roll_std"]  = df[col].rolling(10, min_periods=1).std().fillna(0.0)
+        df[f"{col}_roll_max"]  = df[col].rolling(10, min_periods=1).max()
+        
+    # Ratios
+    df["PM25_PM10_ratio"] = df["PM25"] / (df["PM10"] + 1e-6)
+    df["CO_VOC_ratio"]    = df["CO"]   / (df["VOC"]  + 1e-6)
+    
+    # Exceedances
+    df["PM25_exceed"]  = (df["PM25"] > WHO["PM25"]["safe"]).astype(int)
+    df["PM10_exceed"]  = (df["PM10"] > WHO["PM10"]["safe"]).astype(int)
+    df["CO_exceed"]    = (df["CO"]   > WHO["CO"]["safe"]).astype(int)
+    df["VOC_exceed"]   = (df["VOC"]  > WHO["VOC"]["safe"]).astype(int)
+    df["Total_exceed"] = df[["PM25_exceed","PM10_exceed","CO_exceed","VOC_exceed"]].sum(axis=1)
+    
+    # Composite Pollution Index (CPI)
+    df["CPI"] = (
+        df["PM25"] / WHO["PM25"]["warning"] * 0.35 +
+        df["PM10"] / WHO["PM10"]["warning"] * 0.30 +
+        df["CO"]   / WHO["CO"]["warning"]   * 0.20 +
+        df["VOC"]  / WHO["VOC"]["warning"]  * 0.15
+    )
+    
+    # Cumulative Exposure
+    df["Cumulative_Exposure"] = (df["PM25"].expanding().mean() +
+                                  df["PM10"].expanding().mean()) / 2
+                                  
+    return df[FEATURE_COLS]
 
 
 # ---------------------------------------------------------------------------
@@ -94,6 +207,26 @@ async def lifespan(app: FastAPI):  # type: ignore[type-arg]
         logger.error("Failed to load model files: %s", exc)
         sys.exit(1)
 
+    # Initialize TimescaleDB connection status
+    app.state.db_connected = False
+    db_url = os.getenv("DATABASE_URL") or os.getenv("TIMESCALE_URL")
+    if db_url:
+        if PSYCOPG2_AVAILABLE:
+            try:
+                logger.info("Attempting connection to TimescaleDB...")
+                # Attempt to connect to the database (3-second timeout)
+                conn = psycopg2.connect(db_url, connect_timeout=3)
+                conn.close()
+                app.state.db_connected = True
+                logger.info("Successfully verified connection to TimescaleDB.")
+            except Exception as exc:
+                logger.error("TimescaleDB connection failed on startup: %s", exc)
+                # DO NOT sys.exit(1) here to prevent backend crash!
+        else:
+            logger.warning("psycopg2 is not available; skipping database connection verification.")
+    else:
+        logger.info("No database connection configured (DATABASE_URL / TIMESCALE_URL is empty).")
+
     yield
 
     # Cleanup (nothing to do for in-memory models)
@@ -107,8 +240,24 @@ app = FastAPI(title="ML Filter Estimation Service", lifespan=lifespan)
 
 
 @app.get("/health")
-async def health() -> dict[str, str]:
-    return {"status": "ok"}
+async def health() -> dict[str, Any]:
+    db_status = "not configured"
+    db_url = os.getenv("DATABASE_URL") or os.getenv("TIMESCALE_URL")
+    if db_url:
+        if PSYCOPG2_AVAILABLE:
+            try:
+                conn = psycopg2.connect(db_url, connect_timeout=2)
+                conn.close()
+                db_status = "connected"
+            except Exception as exc:
+                logger.error("Database health check ping failed: %s", exc)
+                db_status = "disconnected"
+        else:
+            db_status = "driver_missing"
+    else:
+        db_status = "not configured"
+
+    return {"status": "ok", "database": db_status}
 
 
 @app.post("/predict", response_model=PredictResponse)
@@ -119,27 +268,110 @@ async def predict(request: PredictRequest) -> Any:
     model = loader.model
     scaler = loader.scaler
 
-    # Build feature vector using DataFrame to avoid feature name warnings
-    feature_names = ["PM2.5", "PM10", "CO (ppm)", "VOC (ppm)", "Suhu (°C)"]
-    feature_df = pd.DataFrame(
-        [[request.pm25, request.pm10, request.co, request.voc, request.suhu]],
-        columns=feature_names,
-    )
+    # Construct history data
+    raw_history = []
+    
+    if request.history and len(request.history) > 0:
+        # Client passed history list
+        for item in request.history:
+            raw_history.append({
+                "pm25": item.pm25,
+                "pm10": item.pm10,
+                "co": item.co,
+                "voc": item.voc,
+                "suhu": item.suhu,
+                "timestamp": item.timestamp
+            })
+        # Check if the current reading is already the last item in history,
+        # otherwise append it to make sure we predict the most current state
+        last_item = raw_history[-1]
+        if not (
+            abs(last_item["pm25"] - request.pm25) < 1e-5 and
+            abs(last_item["pm10"] - request.pm10) < 1e-5 and
+            abs(last_item["co"] - request.co) < 1e-5 and
+            abs(last_item["voc"] - request.voc) < 1e-5 and
+            abs(last_item["suhu"] - request.suhu) < 1e-5
+        ):
+            raw_history.append({
+                "pm25": request.pm25,
+                "pm10": request.pm10,
+                "co": request.co,
+                "voc": request.voc,
+                "suhu": request.suhu,
+                "timestamp": request.timestamp
+            })
+    else:
+        # Use our local in-memory sliding queue
+        current_item = {
+            "pm25": request.pm25,
+            "pm10": request.pm10,
+            "co": request.co,
+            "voc": request.voc,
+            "suhu": request.suhu,
+            "timestamp": request.timestamp
+        }
+        with history_lock:
+            # Avoid duplicate entries if the client polls too fast with identical values
+            if len(sensor_history_queue) == 0 or not (
+                abs(sensor_history_queue[-1]["pm25"] - current_item["pm25"]) < 1e-5 and
+                abs(sensor_history_queue[-1]["pm10"] - current_item["pm10"]) < 1e-5 and
+                abs(sensor_history_queue[-1]["co"] - current_item["co"]) < 1e-5 and
+                abs(sensor_history_queue[-1]["voc"] - current_item["voc"]) < 1e-5 and
+                abs(sensor_history_queue[-1]["suhu"] - current_item["suhu"]) < 1e-5
+            ):
+                sensor_history_queue.append(current_item)
+            raw_history = list(sensor_history_queue)
+
+    # Build DataFrame
+    history_df = pd.DataFrame(raw_history)
+
+    # Compute 28 features
+    features_df = compute_features(history_df)
+
+    # We want to predict for the last item (the current state)
+    current_features = features_df.iloc[[-1]]
 
     # Scale features using the same scaler used during training
-    scaled = scaler.transform(feature_df)
+    scaled = scaler.transform(current_features.values)
 
     # Predict class index and per-class probabilities
     predicted_idx: int = int(model.predict(scaled)[0])
     raw_proba: np.ndarray = model.predict_proba(scaled)[0]
 
-    # Decode label using ModelLoader (handles both with/without label_encoder.pkl)
+    # Decode label using ModelLoader (handles translation of new class labels)
     status = loader.decode_label(predicted_idx)
 
     # Build probabilities dict keyed by decoded label
     probabilities: dict[str, float] = {
         loader.decode_label(i): float(raw_proba[i]) for i in range(len(raw_proba))
     }
+
+    # Calculate rule-based guardrail (aligned with auto fan control thresholds)
+    pm25_val = float(current_features["PM25"].iloc[0])
+    pm10_val = float(current_features["PM10"].iloc[0])
+    co_val = float(current_features["CO"].iloc[0])
+    voc_val = float(current_features["VOC"].iloc[0])
+    cpi_val = float(current_features["CPI"].iloc[0])
+    total_exceed_val = int(current_features["Total_exceed"].iloc[0])
+
+    if pm25_val > 125.4 or pm10_val > 354.0 or co_val > 50.0 or voc_val > 100.0:
+        rule_status = "Ganti Filter"
+    elif pm25_val > 35.4 or pm10_val > 154.0 or co_val > 15.0 or voc_val > 20.0:
+        rule_status = "Perhatian"
+    else:
+        rule_status = "Aman"
+
+    # AI Guardrail check: if actual sensor values exceed safe limits, override to prevent false negatives
+    severity = {"Aman": 0, "Perhatian": 1, "Ganti Filter": 2}
+    if severity[rule_status] > severity[status]:
+        logger.info(f"Guardrail trigger: overriding model prediction '{status}' with '{rule_status}' due to active warning/danger parameters (PM2.5: {pm25_val}, PM10: {pm10_val}, CPI: {cpi_val:.3f}, Exceedances: {total_exceed_val})")
+        status = rule_status
+        # Re-distribute probabilities: assign 100% to the overridden status
+        probabilities = {
+            "Aman": 1.0 if status == "Aman" else 0.0,
+            "Perhatian": 1.0 if status == "Perhatian" else 0.0,
+            "Ganti Filter": 1.0 if status == "Ganti Filter" else 0.0
+        }
 
     confidence = float(max(probabilities.values()))
 
