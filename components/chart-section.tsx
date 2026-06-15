@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Download, Square, Circle, Calendar, Activity, Info } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   AreaChart,
   Area,
@@ -14,6 +15,8 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
+  ReferenceLine,
+  Label,
 } from "recharts";
 import { generateHistoricalData, getStatusLabel, WHO_STANDARDS } from "@/lib/sensor-data";
 import { getHistoricalData, listenToSensorData } from "@/lib/firebase-data";
@@ -48,7 +51,7 @@ const SENSOR_CONFIG = {
   },
   voc: {
     label: "VOC",
-    color: "#10B981",
+    color: "#22C55E",
     unit: "ppm",
     description: "Volatile Organic Compounds",
     min: 0,
@@ -255,6 +258,7 @@ export function ChartSection() {
   const [chartData, setChartData] = useState<DataRow[]>([]);
   const [isFirebaseConnected, setIsFirebaseConnected] = useState(false);
   const [showGuide, setShowGuide] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [visibleLines, setVisibleLines] = useState<Record<"pm25" | "pm10" | "co" | "voc", boolean>>({
     pm25: true,
     pm10: true,
@@ -292,6 +296,7 @@ export function ChartSection() {
     const daysMap = { "1h": 1, "3d": 3, "7d": 7 };
 
     const loadData = async () => {
+      setIsLoading(true);
       try {
         const firebaseData = await getHistoricalData(daysMap[timeRange]);
         if (firebaseData.length > 0) {
@@ -328,6 +333,7 @@ export function ChartSection() {
             setChartData(downsampleData(filtered, 150));
           }
           setIsFirebaseConnected(true);
+          setIsLoading(false);
           return;
         }
       } catch (err) {
@@ -343,6 +349,7 @@ export function ChartSection() {
       } else {
         setChartData(downsampleData(simulated, 150));
       }
+      setIsLoading(false);
     };
 
     loadData();
@@ -442,6 +449,12 @@ export function ChartSection() {
     csvBufferRef.current = [];
     setRecordedCount(0);
     setIsRecording(true);
+  }, []);
+
+  const stopRecordingOnly = useCallback(() => {
+    setIsRecording(false);
+    csvBufferRef.current = [];
+    setRecordedCount(0);
   }, []);
 
   const stopAndExport = useCallback(() => {
@@ -593,13 +606,19 @@ export function ChartSection() {
 
   const config = SENSOR_CONFIG[selectedSensor];
 
+  const safeLimit = selectedSensor !== "all"
+    ? (selectedSensor === "pm25" ? WHO_STANDARDS.PM2_5.safe
+       : selectedSensor === "pm10" ? WHO_STANDARDS.PM10.safe
+       : selectedSensor === "co" ? WHO_STANDARDS.CO.safe
+       : WHO_STANDARDS.VOC.safe)
+    : null;
+
   const formatXAxis = (ts: number) => {
     const d = new Date(ts);
     return timeRange === "1h"
       ? d.toLocaleTimeString("id-ID", {
           hour: "2-digit",
           minute: "2-digit",
-          second: "2-digit",
         })
       : d.toLocaleDateString("id-ID", { weekday: "short", day: "numeric" });
   };
@@ -667,14 +686,24 @@ export function ChartSection() {
           {isLive ? (
             // Live mode: record & export
             isRecording ? (
-              <Button
-                onClick={stopAndExport}
-                size="sm"
-                className="text-xs font-semibold bg-red-500 hover:bg-red-600 text-white gap-1.5"
-              >
-                <Square className="w-3 h-3 fill-current" />
-                Stop & Export CSV
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  onClick={stopAndExport}
+                  size="sm"
+                  className="text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white gap-1.5 shadow-sm"
+                >
+                  <Download className="w-3 h-3" />
+                  Export CSV
+                </Button>
+                <Button
+                  onClick={stopRecordingOnly}
+                  size="sm"
+                  className="text-xs font-semibold bg-red-500 hover:bg-red-600 text-white gap-1.5 shadow-sm"
+                >
+                  <Square className="w-3 h-3 fill-current" />
+                  Stop Recording
+                </Button>
+              </div>
             ) : (
               <Button
                 onClick={startRecording}
@@ -744,7 +773,7 @@ export function ChartSection() {
                   pm25: "#8B5CF6",
                   pm10: "#3B82F6",
                   co: "#F59E0B",
-                  voc: "#10B981",
+                  voc: "#22C55E",
                 };
                 const labels = {
                   pm25: "PM2.5",
@@ -809,8 +838,33 @@ export function ChartSection() {
       </div>
 
       {/* ── Chart ── */}
-      <div className="h-[300px] sm:h-[350px] w-full">
-        <ResponsiveContainer width="100%" height="100%">
+      <div className="relative h-[300px] sm:h-[350px] w-full overflow-hidden">
+        {isLoading ? (
+          <div className="absolute inset-0 flex flex-col justify-between p-4 animate-pulse">
+            <div className="flex justify-between items-center mb-4">
+              <Skeleton className="h-4 w-12" />
+              <Skeleton className="h-4 w-16" />
+            </div>
+            <div className="flex-1 flex items-end gap-2 my-2">
+              <Skeleton className="h-[20%] flex-1 bg-primary/20" />
+              <Skeleton className="h-[40%] flex-1 bg-primary/20" />
+              <Skeleton className="h-[60%] flex-1 bg-primary/20" />
+              <Skeleton className="h-[50%] flex-1 bg-primary/20" />
+              <Skeleton className="h-[70%] flex-1 bg-primary/20" />
+              <Skeleton className="h-[90%] flex-1 bg-primary/20" />
+              <Skeleton className="h-[80%] flex-1 bg-primary/20" />
+              <Skeleton className="h-[60%] flex-1 bg-primary/20" />
+              <Skeleton className="h-[40%] flex-1 bg-primary/20" />
+              <Skeleton className="h-[20%] flex-1 bg-primary/20" />
+            </div>
+            <div className="flex justify-between mt-2">
+              <Skeleton className="h-3 w-16" />
+              <Skeleton className="h-3 w-16" />
+              <Skeleton className="h-3 w-16" />
+            </div>
+          </div>
+        ) : (
+          <ResponsiveContainer width="99%" height="100%">
           {selectedSensor === "all" ? (
             <LineChart
               data={chartData}
@@ -853,6 +907,83 @@ export function ChartSection() {
               <Tooltip content={<CustomTooltip />} />
 
               {visibleLines.pm25 && (
+                <ReferenceLine
+                  y={WHO_STANDARDS.PM2_5.safe}
+                  stroke="#8B5CF6"
+                  strokeDasharray="4 4"
+                  strokeWidth={1.5}
+                  strokeOpacity={0.8}
+                >
+                  <Label
+                    value={`Batas Aman PM2.5: ${WHO_STANDARDS.PM2_5.safe} μg/m³`}
+                    position="insideTopRight"
+                    fill="#8B5CF6"
+                    fontSize={10}
+                    fontWeight="600"
+                    offset={10}
+                    className="select-none fill-[#8B5CF6] dark:fill-[#A78BFA]"
+                  />
+                </ReferenceLine>
+              )}
+              {visibleLines.pm10 && (
+                <ReferenceLine
+                  y={WHO_STANDARDS.PM10.safe}
+                  stroke="#3B82F6"
+                  strokeDasharray="4 4"
+                  strokeWidth={1.5}
+                  strokeOpacity={0.8}
+                >
+                  <Label
+                    value={`Batas Aman PM10: ${WHO_STANDARDS.PM10.safe} μg/m³`}
+                    position="insideTopRight"
+                    fill="#3B82F6"
+                    fontSize={10}
+                    fontWeight="600"
+                    offset={10}
+                    className="select-none fill-[#3B82F6] dark:fill-[#60A5FA]"
+                  />
+                </ReferenceLine>
+              )}
+              {visibleLines.co && (
+                <ReferenceLine
+                  y={WHO_STANDARDS.CO.safe}
+                  stroke="#F59E0B"
+                  strokeDasharray="4 4"
+                  strokeWidth={1.5}
+                  strokeOpacity={0.8}
+                >
+                  <Label
+                    value={`Batas Aman CO: ${WHO_STANDARDS.CO.safe} ppm`}
+                    position="insideTopRight"
+                    fill="#F59E0B"
+                    fontSize={10}
+                    fontWeight="600"
+                    offset={10}
+                    className="select-none fill-[#F59E0B] dark:fill-[#FBBF24]"
+                  />
+                </ReferenceLine>
+              )}
+              {visibleLines.voc && (
+                <ReferenceLine
+                  y={WHO_STANDARDS.VOC.safe}
+                  stroke="#22C55E"
+                  strokeDasharray="4 4"
+                  strokeWidth={1.5}
+                  strokeOpacity={0.8}
+                >
+                  <Label
+                    value={`Batas Aman VOC: ${WHO_STANDARDS.VOC.safe} ppm`}
+                    position="insideTopRight"
+                    fill="#22C55E"
+                    fontSize={10}
+                    fontWeight="600"
+                    offset={10}
+                    className="select-none fill-[#22C55E] dark:fill-[#4ADE80]"
+                  />
+                </ReferenceLine>
+              )}
+
+              {visibleLines.pm25 && (
                 <Line
                   type="monotone"
                   dataKey="pm25"
@@ -893,7 +1024,7 @@ export function ChartSection() {
                   type="monotone"
                   dataKey="voc"
                   name="VOC (ppm)"
-                  stroke="#10B981"
+                  stroke="#22C55E"
                   strokeWidth={2}
                   dot={false}
                   activeDot={{ r: 4, strokeWidth: 0 }}
@@ -955,6 +1086,26 @@ export function ChartSection() {
 
               <Tooltip content={<CustomTooltip />} />
 
+              {safeLimit !== null && (
+                <ReferenceLine
+                  y={safeLimit}
+                  stroke="#EF4444"
+                  strokeDasharray="4 4"
+                  strokeWidth={1.5}
+                  strokeOpacity={0.8}
+                >
+                  <Label
+                    value={`Batas Aman: ${safeLimit} ${config.unit}`}
+                    position="insideTopRight"
+                    fill="#EF4444"
+                    fontSize={10}
+                    fontWeight="600"
+                    offset={10}
+                    className="select-none fill-[#EF4444] dark:fill-[#F87171]"
+                  />
+                </ReferenceLine>
+              )}
+
               <Area
                 type="monotone"
                 dataKey={selectedSensor}
@@ -969,6 +1120,7 @@ export function ChartSection() {
             </AreaChart>
           )}
         </ResponsiveContainer>
+      )}
       </div>
 
       {/* ── Recording hint ── */}

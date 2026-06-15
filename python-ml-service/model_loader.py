@@ -47,11 +47,24 @@ class ModelLoader:
     def decode_label(self, idx: int) -> str:
         """Konversi index prediksi ke label string."""
         if self.label_encoder is not None:
-            return str(self.label_encoder.inverse_transform([idx])[0])
+            raw_label = str(self.label_encoder.inverse_transform([idx])[0])
+            mapping = {
+                "Tidak Perlu": "Aman",
+                "Perlu": "Perhatian",
+                "Segera Ganti": "Ganti Filter"
+            }
+            return mapping.get(raw_label, raw_label)
         return self.LABEL_MAP.get(int(idx), str(idx))
 
     def get_class_labels(self) -> list[str]:
         """Kembalikan daftar label sesuai urutan index."""
         if self.label_encoder is not None:
-            return [str(c) for c in self.label_encoder.classes_]
+            raw_classes = [str(c) for c in self.label_encoder.classes_]
+            mapping = {
+                "Tidak Perlu": "Aman",
+                "Perlu": "Perhatian",
+                "Segera Ganti": "Ganti Filter"
+            }
+            return [mapping.get(c, c) for c in raw_classes]
         return list(self.LABEL_MAP.values())
+

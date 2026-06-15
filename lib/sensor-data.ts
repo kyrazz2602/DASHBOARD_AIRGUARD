@@ -101,27 +101,25 @@ export function getStatusLabel(
 export type FanSpeed = "off" | "low" | "normal" | "high";
 
 export function detectRecommendedFanSpeed(data: SensorReading): FanSpeed {
-  // Check if any sensor exceeds danger threshold
-  if (
-    data.pm25 > WHO_STANDARDS.PM2_5.danger ||
-    data.pm10 > WHO_STANDARDS.PM10.danger ||
-    data.co > WHO_STANDARDS.CO.danger ||
-    data.voc > WHO_STANDARDS.VOC.danger
-  ) {
+  // Get status of each main air quality pollutant
+  const pm25Status = getStatusLabel(data.pm25, "PM2_5");
+  const pm10Status = getStatusLabel(data.pm10, "PM10");
+  const coStatus = getStatusLabel(data.co, "CO");
+  const vocStatus = getStatusLabel(data.voc, "VOC");
+
+  const statuses = [pm25Status, pm10Status, coStatus, vocStatus];
+
+  // 1. If any sensor is in Danger (Bahaya) -> High speed
+  if (statuses.includes("Danger")) {
     return "high";
   }
 
-  // Check if any sensor exceeds warning threshold
-  if (
-    data.pm25 > WHO_STANDARDS.PM2_5.warning ||
-    data.pm10 > WHO_STANDARDS.PM10.warning ||
-    data.co > WHO_STANDARDS.CO.warning ||
-    data.voc > WHO_STANDARDS.VOC.warning
-  ) {
+  // 2. If any sensor is in Warning (Perhatian) -> Normal speed
+  if (statuses.includes("Warning")) {
     return "normal";
   }
 
-  // All sensors in safe range
+  // 3. Otherwise (all sensors are Safe/Aman) -> Low speed
   return "low";
 }
 

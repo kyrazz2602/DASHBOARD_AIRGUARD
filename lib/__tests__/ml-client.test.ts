@@ -17,39 +17,39 @@ const anySensorFeatures = fc.record<SensorFeatures>({
 
 // ---------------------------------------------------------------------------
 // Arbitrary: generates SensorFeatures that trigger "Ganti Filter"
-// (at least one threshold exceeded: pm25 > 75 OR pm10 > 150 OR co > 9 OR voc > 2)
+// (at least one threshold exceeded: pm25 > 125.4 OR pm10 > 354 OR co > 50 OR voc > 2.2)
 // ---------------------------------------------------------------------------
 const gantiFeaturesArb = fc.oneof(
-  // pm25 > 75
+  // pm25 > 125.4
   fc.record<SensorFeatures>({
-    pm25: fc.double({ min: 75.001, max: 1000, noNaN: true }),
-    pm10: fc.double({ min: 0, max: 150, noNaN: true }),
-    co: fc.double({ min: 0, max: 9, noNaN: true }),
-    voc: fc.double({ min: 0, max: 2, noNaN: true }),
+    pm25: fc.double({ min: 125.401, max: 1000, noNaN: true }),
+    pm10: fc.double({ min: 0, max: 354, noNaN: true }),
+    co: fc.double({ min: 0, max: 50, noNaN: true }),
+    voc: fc.double({ min: 0, max: 100, noNaN: true }),
     suhu: fc.double({ min: 0, max: 50, noNaN: true }),
   }),
-  // pm10 > 150
+  // pm10 > 354
   fc.record<SensorFeatures>({
-    pm25: fc.double({ min: 0, max: 75, noNaN: true }),
-    pm10: fc.double({ min: 150.001, max: 2000, noNaN: true }),
-    co: fc.double({ min: 0, max: 9, noNaN: true }),
-    voc: fc.double({ min: 0, max: 2, noNaN: true }),
+    pm25: fc.double({ min: 0, max: 125.4, noNaN: true }),
+    pm10: fc.double({ min: 354.001, max: 2000, noNaN: true }),
+    co: fc.double({ min: 0, max: 50, noNaN: true }),
+    voc: fc.double({ min: 0, max: 100, noNaN: true }),
     suhu: fc.double({ min: 0, max: 50, noNaN: true }),
   }),
-  // co > 9
+  // co > 50
   fc.record<SensorFeatures>({
-    pm25: fc.double({ min: 0, max: 75, noNaN: true }),
-    pm10: fc.double({ min: 0, max: 150, noNaN: true }),
-    co: fc.double({ min: 9.001, max: 100, noNaN: true }),
-    voc: fc.double({ min: 0, max: 2, noNaN: true }),
+    pm25: fc.double({ min: 0, max: 125.4, noNaN: true }),
+    pm10: fc.double({ min: 0, max: 354, noNaN: true }),
+    co: fc.double({ min: 50.001, max: 1000, noNaN: true }),
+    voc: fc.double({ min: 0, max: 100, noNaN: true }),
     suhu: fc.double({ min: 0, max: 50, noNaN: true }),
   }),
-  // voc > 2
+  // voc > 100
   fc.record<SensorFeatures>({
-    pm25: fc.double({ min: 0, max: 75, noNaN: true }),
-    pm10: fc.double({ min: 0, max: 150, noNaN: true }),
-    co: fc.double({ min: 0, max: 9, noNaN: true }),
-    voc: fc.double({ min: 2.001, max: 50, noNaN: true }),
+    pm25: fc.double({ min: 0, max: 125.4, noNaN: true }),
+    pm10: fc.double({ min: 0, max: 354, noNaN: true }),
+    co: fc.double({ min: 0, max: 50, noNaN: true }),
+    voc: fc.double({ min: 100.001, max: 1000, noNaN: true }),
     suhu: fc.double({ min: 0, max: 50, noNaN: true }),
   }),
 );
@@ -59,36 +59,36 @@ const gantiFeaturesArb = fc.oneof(
 // (no "Ganti Filter" threshold met, but at least one "Perhatian" threshold met)
 // ---------------------------------------------------------------------------
 const perhatianFeaturesArb = fc.oneof(
-  // pm25 in (35, 75]
+  // pm25 in (35.4, 125.4]
   fc.record<SensorFeatures>({
-    pm25: fc.double({ min: 35.001, max: 75, noNaN: true }),
-    pm10: fc.double({ min: 0, max: 75, noNaN: true }),
-    co: fc.double({ min: 0, max: 2, noNaN: true }),
-    voc: fc.double({ min: 0, max: 0.5, noNaN: true }),
+    pm25: fc.double({ min: 35.401, max: 125.4, noNaN: true }),
+    pm10: fc.double({ min: 0, max: 154, noNaN: true }),
+    co: fc.double({ min: 0, max: 15, noNaN: true }),
+    voc: fc.double({ min: 0, max: 20, noNaN: true }),
     suhu: fc.double({ min: 0, max: 50, noNaN: true }),
   }),
-  // pm10 in (75, 150]
+  // pm10 in (154, 354]
   fc.record<SensorFeatures>({
-    pm25: fc.double({ min: 0, max: 35, noNaN: true }),
-    pm10: fc.double({ min: 75.001, max: 150, noNaN: true }),
-    co: fc.double({ min: 0, max: 2, noNaN: true }),
-    voc: fc.double({ min: 0, max: 0.5, noNaN: true }),
+    pm25: fc.double({ min: 0, max: 35.4, noNaN: true }),
+    pm10: fc.double({ min: 154.001, max: 354, noNaN: true }),
+    co: fc.double({ min: 0, max: 15, noNaN: true }),
+    voc: fc.double({ min: 0, max: 20, noNaN: true }),
     suhu: fc.double({ min: 0, max: 50, noNaN: true }),
   }),
-  // co in (2, 9]
+  // co in (15, 50]
   fc.record<SensorFeatures>({
-    pm25: fc.double({ min: 0, max: 35, noNaN: true }),
-    pm10: fc.double({ min: 0, max: 75, noNaN: true }),
-    co: fc.double({ min: 2.001, max: 9, noNaN: true }),
-    voc: fc.double({ min: 0, max: 0.5, noNaN: true }),
+    pm25: fc.double({ min: 0, max: 35.4, noNaN: true }),
+    pm10: fc.double({ min: 0, max: 154, noNaN: true }),
+    co: fc.double({ min: 15.001, max: 50, noNaN: true }),
+    voc: fc.double({ min: 0, max: 20, noNaN: true }),
     suhu: fc.double({ min: 0, max: 50, noNaN: true }),
   }),
-  // voc in (0.5, 2]
+  // voc in (20, 100]
   fc.record<SensorFeatures>({
-    pm25: fc.double({ min: 0, max: 35, noNaN: true }),
-    pm10: fc.double({ min: 0, max: 75, noNaN: true }),
-    co: fc.double({ min: 0, max: 2, noNaN: true }),
-    voc: fc.double({ min: 0.501, max: 2, noNaN: true }),
+    pm25: fc.double({ min: 0, max: 35.4, noNaN: true }),
+    pm10: fc.double({ min: 0, max: 154, noNaN: true }),
+    co: fc.double({ min: 0, max: 15, noNaN: true }),
+    voc: fc.double({ min: 20.001, max: 100, noNaN: true }),
     suhu: fc.double({ min: 0, max: 50, noNaN: true }),
   }),
 );
@@ -98,10 +98,10 @@ const perhatianFeaturesArb = fc.oneof(
 // (all values at or below "Perhatian" thresholds)
 // ---------------------------------------------------------------------------
 const amanFeaturesArb = fc.record<SensorFeatures>({
-  pm25: fc.double({ min: 0, max: 35, noNaN: true }),
-  pm10: fc.double({ min: 0, max: 75, noNaN: true }),
-  co: fc.double({ min: 0, max: 2, noNaN: true }),
-  voc: fc.double({ min: 0, max: 0.5, noNaN: true }),
+  pm25: fc.double({ min: 0, max: 35.4, noNaN: true }),
+  pm10: fc.double({ min: 0, max: 154, noNaN: true }),
+  co: fc.double({ min: 0, max: 15, noNaN: true }),
+  voc: fc.double({ min: 0, max: 20, noNaN: true }),
   suhu: fc.double({ min: 0, max: 50, noNaN: true }),
 });
 
@@ -148,7 +148,7 @@ describe("Property 4: Rule-Based Fallback Always Returns Valid Status", () => {
 // Validates: Requirements 7.2, 7.3, 7.4
 // ===========================================================================
 describe("Property 5: Rule-Based Threshold Consistency", () => {
-  it('returns "Ganti Filter" when pm25 > 75 OR pm10 > 150 OR co > 9 OR voc > 2', () => {
+  it('returns "Ganti Filter" when pm25 > 125.4 OR pm10 > 354 OR co > 50 OR voc > 2.2', () => {
     fc.assert(
       fc.property(gantiFeaturesArb, (features) => {
         expect(getRuleBasedStatus(features)).toBe("Ganti Filter");
@@ -173,25 +173,23 @@ describe("Property 5: Rule-Based Threshold Consistency", () => {
   });
 
   // Boundary: exact threshold values should NOT trigger the higher status
-  it('returns "Aman" for exact boundary values (pm25=35, pm10=75, co=2, voc=0.5)', () => {
+  it('returns "Aman" for exact boundary values (pm25=35.4, pm10=154, co=15, voc=20)', () => {
     const boundary: SensorFeatures = {
-      pm25: 35,
-      pm10: 75,
-      co: 2,
-      voc: 0.5,
+      pm25: 35.4,
+      pm10: 154,
+      co: 15,
+      voc: 20,
       suhu: 25,
     };
     expect(getRuleBasedStatus(boundary)).toBe("Aman");
   });
 
-  it('returns "Perhatian" for exact Ganti Filter boundary values (pm25=75, pm10=150, co=9, voc=2)', () => {
-    // pm25=75 is NOT > 75, pm10=150 is NOT > 150, co=9 is NOT > 9, voc=2 is NOT > 2
-    // But pm25=75 > 35, so "Perhatian"
+  it('returns "Perhatian" for exact Ganti Filter boundary values (pm25=125.4, pm10=354, co=50, voc=100)', () => {
     const boundary: SensorFeatures = {
-      pm25: 75,
-      pm10: 150,
-      co: 9,
-      voc: 2,
+      pm25: 125.4,
+      pm10: 354,
+      co: 50,
+      voc: 100,
       suhu: 25,
     };
     expect(getRuleBasedStatus(boundary)).toBe("Perhatian");

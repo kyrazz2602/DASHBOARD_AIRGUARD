@@ -6,6 +6,7 @@ export function useSensorData(refreshInterval: number = 3000) {
   const [data, setData] = useState<SensorReading>(generateSensorData());
   const [useFirebase, setUseFirebase] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     let cleanup: (() => void) | null = null;
@@ -18,16 +19,19 @@ export function useSensorData(refreshInterval: number = 3000) {
           (firebaseData) => {
             setData(firebaseData);
             setError(null);
+            setIsLoading(false);
           },
           (err) => {
             console.error('Firebase connection error:', err);
             setError(err);
             setUseFirebase(false); // Fall back to simulated data
+            setIsLoading(false);
           }
         );
       } catch (err) {
         console.error('Failed to initialize Firebase listener:', err);
         setUseFirebase(false);
+        setIsLoading(false);
       }
     }
 
@@ -35,6 +39,7 @@ export function useSensorData(refreshInterval: number = 3000) {
     if (!useFirebase) {
       fallbackInterval = setInterval(() => {
         setData(generateSensorData());
+        setIsLoading(false);
       }, refreshInterval);
     }
 
@@ -44,5 +49,5 @@ export function useSensorData(refreshInterval: number = 3000) {
     };
   }, [refreshInterval, useFirebase]);
 
-  return data;
+  return { data, isLoading, error };
 }

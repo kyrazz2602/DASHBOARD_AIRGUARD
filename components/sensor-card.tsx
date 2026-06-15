@@ -1,6 +1,7 @@
 import { Card } from "@/components/ui/card";
 import { getStatusLabel } from "@/lib/sensor-data";
 import { cn } from "@/lib/utils";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface SensorCardProps {
   label: string;
@@ -9,6 +10,7 @@ interface SensorCardProps {
   type: "PM2_5" | "PM10" | "CO" | "VOC";
   icon: React.ReactNode;
   className?: string;
+  isLoading?: boolean;
 }
 
 const STATUS_STYLES = {
@@ -51,9 +53,29 @@ export function SensorCard({
   type,
   icon,
   className,
+  isLoading = false,
 }: SensorCardProps) {
   const statusLabel = getStatusLabel(value, type) as keyof typeof STATUS_STYLES;
   const styles = STATUS_STYLES[statusLabel] ?? STATUS_STYLES.Safe;
+
+  if (isLoading) {
+    return (
+      <Card className={cn("p-4 sm:p-5 bg-card border border-border/60 space-y-3", className)}>
+        <div className="flex items-center justify-between">
+          <Skeleton className="h-3.5 w-12" />
+          <Skeleton className="h-7 w-7 rounded-lg" />
+        </div>
+        <div className="flex items-baseline gap-1">
+          <Skeleton className="h-8 w-16" />
+          <Skeleton className="h-3 w-8" />
+        </div>
+        <div className="flex items-center gap-1.5 pt-0.5">
+          <Skeleton className="h-1.5 w-1.5 rounded-full" />
+          <Skeleton className="h-3.5 w-10" />
+        </div>
+      </Card>
+    );
+  }
 
   return (
     <Card

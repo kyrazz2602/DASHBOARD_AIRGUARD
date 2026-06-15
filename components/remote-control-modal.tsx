@@ -110,7 +110,7 @@ function RadarView({
       ></div>
 
       {/* Live LiDAR Distance display */}
-      <div className="absolute top-4 left-4 z-20 font-mono text-xs flex flex-col gap-1">
+      <div className="absolute top-3 left-3 lg:top-4 lg:left-4 z-20 font-mono text-xs flex flex-col gap-1">
         <div className="flex items-center gap-1.5">
           <span className={cn("w-2 h-2 rounded-full", lidarDistance !== null && !lidarError ? "bg-emerald-500 animate-pulse" : "bg-red-500")} />
           <span style={{ color: `${C.neon}dd` }}>Sensor Jarak (LiDAR): {lidarError ? "OFFLINE" : "AKTIF"}</span>
@@ -206,13 +206,11 @@ function DPad({
 
   return (
     <div
-      className="relative select-none touch-none"
-      style={{ width: SIZE, height: SIZE }}
+      className="relative select-none touch-none w-[170px] h-[170px] lg:w-[200px] lg:h-[200px]"
     >
       <svg
-        width={SIZE}
-        height={SIZE}
-        viewBox={`0 0 ${SIZE} ${SIZE}`}
+        viewBox="0 0 200 200"
+        className="w-full h-full"
         xmlns="http://www.w3.org/2000/svg"
         style={{ overflow: "visible" }}
       >
@@ -459,16 +457,16 @@ export function RemoteControlModal({
     >
       {/* Header */}
       <div
-        className="flex items-center justify-between px-4 py-3 shrink-0 backdrop-blur-md"
+        className="flex items-center justify-between px-3 py-2.5 lg:px-4 lg:py-3 shrink-0 backdrop-blur-md"
         style={{
           background: `${C.bgAlt}ee`,
           borderBottom: `1px solid ${C.neon}22`,
         }}
       >
-        <div className="flex items-center gap-2">
-          <Target className="w-4 h-4" style={{ color: C.neon }} />
+        <div className="flex items-center gap-2 min-w-0">
+          <Target className="w-4 h-4 shrink-0" style={{ color: C.neon }} />
           <span
-            className="font-bold tracking-wider text-sm uppercase"
+            className="font-bold tracking-wider text-xs lg:text-sm uppercase truncate max-w-[50vw] lg:max-w-none"
             style={{ color: C.neon }}
           >
             Remote Control Robot (Manual)
@@ -476,14 +474,14 @@ export function RemoteControlModal({
           {/* Sync indicator */}
           {isSyncing && (
             <span
-              className="w-1.5 h-1.5 rounded-full animate-pulse"
+              className="w-1.5 h-1.5 rounded-full animate-pulse shrink-0"
               style={{ background: C.neon }}
             />
           )}
           {/* Active direction label */}
           {activeDir && (
             <span
-              className="text-[10px] font-mono px-2 py-0.5 rounded"
+              className="text-[9px] lg:text-[10px] font-mono px-1.5 py-0.5 rounded shrink-0"
               style={{ background: `${C.neon}18`, color: C.neon }}
             >
               {GERAK_MAP[activeDir]}
@@ -492,7 +490,7 @@ export function RemoteControlModal({
         </div>
         <button
           onClick={onClose}
-          className="p-1.5 rounded-lg transition-colors"
+          className="p-1.5 rounded-lg transition-colors shrink-0"
           style={{ color: `${C.neon}88` }}
           onMouseEnter={(e) => (e.currentTarget.style.color = C.neon)}
           onMouseLeave={(e) => (e.currentTarget.style.color = `${C.neon}88`)}
@@ -502,7 +500,7 @@ export function RemoteControlModal({
       </div>
 
       {/* Body */}
-      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
+      <div className="flex-1 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden">
         {/* Radar */}
         <RadarView
           posX={position.x}
@@ -510,16 +508,16 @@ export function RemoteControlModal({
           activeDir={activeDir}
           lidarDistance={lidarDistance}
           lidarError={lidarError}
-          className="flex-1 w-full min-h-[40vh] lg:min-h-0"
+          className="flex-1 w-full min-h-[30vh] lg:min-h-0"
         />
 
         {/* Controls panel */}
         <div
-          className="px-5 py-5 flex flex-col items-center justify-center gap-6 shrink-0 lg:w-72 lg:py-8"
-          style={{ background: C.bgAlt, borderTop: `1px solid ${C.neon}18` }}
+          className="p-4 lg:px-5 lg:py-8 flex flex-col items-center justify-center gap-4 lg:gap-6 shrink-0 lg:w-72 border-t lg:border-t-0 lg:border-l"
+          style={{ background: C.bgAlt, borderColor: `${C.neon}18` }}
         >
           <p
-            className="text-[11px] uppercase tracking-widest"
+            className="text-[10px] lg:text-[11px] uppercase tracking-widest font-semibold"
             style={{ color: `${C.neon}66` }}
           >
             Tahan untuk bergerak
@@ -533,7 +531,7 @@ export function RemoteControlModal({
 
           {/* Keyboard hint */}
           <div
-            className="flex items-center gap-2 text-[10px]"
+            className="hidden lg:flex items-center gap-2 text-[10px]"
             style={{ color: `${C.neon}33` }}
           >
             <Keyboard className="w-3 h-3" />

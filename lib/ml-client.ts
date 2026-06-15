@@ -27,8 +27,8 @@ export class MLServiceError extends Error {
  * Rule-based fallback for filter status classification.
  *
  * Postconditions:
- * - Returns "Ganti Filter" if pm25 > 125.4 OR pm10 > 354 OR co > 50 OR voc > 2.2
- * - Returns "Perhatian" if pm25 > 35.4 OR pm10 > 154 OR co > 15 OR voc > 0.22
+ * - Returns "Ganti Filter" if pm25 > 125.4 OR pm10 > 354 OR co > 50 OR voc > 100
+ * - Returns "Perhatian" if pm25 > 35.4 OR pm10 > 154 OR co > 15 OR voc > 20
  * - Returns "Aman" for all other conditions
  * - Never throws, never returns null
  */
@@ -36,12 +36,12 @@ export function getRuleBasedStatus(features: SensorFeatures): FilterStatus {
   const { pm25, pm10, co, voc } = features;
 
   // Check "Ganti Filter" threshold (most severe — check first)
-  if (pm25 > 125.4 || pm10 > 354 || co > 50 || voc > 2.2) {
+  if (pm25 > 125.4 || pm10 > 354 || co > 50 || voc > 100) {
     return "Ganti Filter";
   }
 
   // Check "Perhatian" threshold
-  if (pm25 > 35.4 || pm10 > 154 || co > 15 || voc > 0.22) {
+  if (pm25 > 35.4 || pm10 > 154 || co > 15 || voc > 20) {
     return "Perhatian";
   }
 
@@ -105,8 +105,20 @@ export async function predictFilterStatus(
 
     if (!response.ok) {
       if (response.status === 422) {
+        let errMsg = "Nilai sensor tidak valid";
+        try {
+          const errData = await response.json();
+          if (errData.details && Array.isArray(errData.details)) {
+            const detailMsgs = errData.details.map((d: any) => d.message).join(", ");
+            errMsg = `Nilai sensor tidak valid: ${detailMsgs}`;
+          } else if (errData.error) {
+            errMsg = errData.error;
+          }
+        } catch {
+          // ignore
+        }
         throw new MLServiceError(
-          "Invalid sensor input values",
+          errMsg,
           "INVALID_INPUT",
         );
       }
