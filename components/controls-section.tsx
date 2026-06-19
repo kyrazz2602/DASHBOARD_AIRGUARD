@@ -195,9 +195,10 @@ export function ControlsSection({
             </div>
 
             {/* Auto Mode Toggle */}
-            <div className="flex items-center gap-2 shrink-0">
-              <span className="text-[11px] font-medium text-muted-foreground hidden sm:block">
+            <label className="flex items-center gap-2 shrink-0 cursor-pointer min-h-[44px] py-1 select-none">
+              <span className="text-[11px] font-medium text-muted-foreground flex items-center gap-1">
                 Auto
+                {isAutoMode && <Lock className="w-3 h-3 text-amber-500 animate-[bounce_1.5s_infinite]" />}
               </span>
               <Switch
                 checked={isAutoMode}
@@ -205,17 +206,15 @@ export function ControlsSection({
                 disabled={isSyncing}
                 className="data-[state=checked]:bg-emerald-500"
               />
-            </div>
+            </label>
           </div>
 
           {/* Speed Buttons */}
-          <div className="relative">
+          <div className="space-y-3">
             {isAutoMode && (
-              <div className="absolute inset-0 z-10 bg-background/50 backdrop-blur-[2px] flex items-center justify-center rounded-xl border border-dashed border-muted-foreground/20 cursor-not-allowed">
-                <div className="flex items-center gap-2 bg-background/90 px-3 py-1.5 rounded-full border shadow-sm text-xs font-medium text-muted-foreground">
-                  <Lock className="w-3 h-3" />
-                  Dikunci — Mode Auto Aktif
-                </div>
+              <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-400 text-xs font-medium animate-in slide-in-from-top-1 duration-200">
+                <Lock className="w-3.5 h-3.5 shrink-0" />
+                <span>Manual dikunci — Nonaktifkan Auto untuk mengubah kecepatan</span>
               </div>
             )}
 
@@ -228,9 +227,11 @@ export function ControlsSection({
                     key={speed}
                     onClick={() => handleManualChange(speed)}
                     disabled={isAutoMode || isSyncing}
+                    title={isAutoMode ? "Nonaktifkan Auto untuk mengubah kecepatan manual" : undefined}
                     className={cn(
                       "flex flex-col items-center justify-center py-2 sm:py-3.5 rounded-xl border-2 transition-all duration-200 min-h-[64px] sm:min-h-[72px] gap-0.5 sm:gap-1",
                       isActive ? cfg.active : cn("bg-card", cfg.color),
+                      isAutoMode && "opacity-40 cursor-not-allowed",
                     )}
                   >
                     {speed !== "off" && (
@@ -255,12 +256,21 @@ export function ControlsSection({
       <RemoteControlModal
         isOpen={isRemoteOpen}
         onClose={() => setIsRemoteOpen(false)}
+        onSwitchToAuto={() => {
+          setIsRemoteOpen(false);
+          setIsMapOpen(true);
+        }}
       />
 
       <MapPlanningModal
         isOpen={isMapOpen}
         onClose={() => setIsMapOpen(false)}
+        onSwitchToManual={() => {
+          setIsMapOpen(false);
+          setIsRemoteOpen(true);
+        }}
       />
     </>
   );
 }
+

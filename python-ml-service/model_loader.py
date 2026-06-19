@@ -1,70 +1,55 @@
 """
-ModelLoader: loads best_model.pkl, scaler.pkl, and optionally label_encoder.pkl
-from the models/ directory on initialization.
+ModelLoader: loads model_decision_tree.pkl, model_random_forest.pkl, scaler.pkl,
+and feature_cols.pkl from the models/ directory on initialization.
 """
 
 from pathlib import Path
-
+import json
 import joblib
 
 
 class ModelLoader:
-    """Load and expose the trained ML model, scaler, and optional label encoder."""
+    """Load and expose the trained ML regression models, scaler, and feature columns."""
 
-    # Fallback label map jika label_encoder.pkl tidak ada
-    # Urutan alphabetical: Aman=0, Ganti Filter=1, Perhatian=2
-    # (sklearn LabelEncoder mengurutkan secara alphabetical)
-    LABEL_MAP = {0: "Aman", 1: "Ganti Filter", 2: "Perhatian"}
+    AVAILABLE_MODELS = ["decision_tree", "random_forest"]
+    DEFAULT_MODEL = "decision_tree"
 
     def __init__(self) -> None:
         models_dir = Path(__file__).parent / "models"
 
-        model_path  = models_dir / "best_model.pkl"
+        dt_path = models_dir / "model_decision_tree.pkl"
+        rf_path = models_dir / "model_random_forest.pkl"
         scaler_path = models_dir / "scaler.pkl"
-        le_path     = models_dir / "label_encoder.pkl"
+        features_path = models_dir / "feature_cols.pkl"
+        summary_path = models_dir / "pipeline_summary.json"
 
-        if not model_path.exists():
-            raise FileNotFoundError(
-                f"Model file not found: {model_path}. "
-                "Place best_model.pkl in the models/ directory before starting the service."
-            )
+        # Check required files
+        for p in [dt_path, rf_path, scaler_path, features_path]:
+            if not p.exists():
+                raise FileNotFoundError(
+                    f"Required model file not found: {p}. "
+                    "Place all model outputs in the models/ directory before starting."
+                )
 
-        if not scaler_path.exists():
-            raise FileNotFoundError(
-                f"Scaler file not found: {scaler_path}. "
-                "Place scaler.pkl in the models/ directory before starting the service."
-            )
-
-        self.model  = joblib.load(model_path)
+        # Load models and preprocessing artifacts
+        self.models = {
+            "decision_tree": joblib.load(dt_path),
+            "random_forest": joblib.load(rf_path)
+        }
         self.scaler = joblib.load(scaler_path)
+        self.feature_cols = joblib.load(features_path)
 
-        # Label encoder opsional — jika tidak ada, gunakan LABEL_MAP
-        if le_path.exists():
-            self.label_encoder = joblib.load(le_path)
-        else:
-            self.label_encoder = None
+        # Load summary if available
+        self.summary = {}
+        if summary_path.exists():
+            try:
+                with open(summary_path, "r") as f:
+                    self.summary = json.load(f)
+            except Exception:
+                pass
 
-    def decode_label(self, idx: int) -> str:
-        """Konversi index prediksi ke label string."""
-        if self.label_encoder is not None:
-            raw_label = str(self.label_encoder.inverse_transform([idx])[0])
-            mapping = {
-                "Tidak Perlu": "Aman",
-                "Perlu": "Perhatian",
-                "Segera Ganti": "Ganti Filter"
-            }
-            return mapping.get(raw_label, raw_label)
-        return self.LABEL_MAP.get(int(idx), str(idx))
-
-    def get_class_labels(self) -> list[str]:
-        """Kembalikan daftar label sesuai urutan index."""
-        if self.label_encoder is not None:
-            raw_classes = [str(c) for c in self.label_encoder.classes_]
-            mapping = {
-                "Tidak Perlu": "Aman",
-                "Perlu": "Perhatian",
-                "Segera Ganti": "Ganti Filter"
-            }
-            return [mapping.get(c, c) for c in raw_classes]
-        return list(self.LABEL_MAP.values())
+    def get_model(self, model_type: str):
+        """Dapatkan model berdasarkan tipe, fallback ke default."""
+        model_type_lower = (model_type or "").lower().strip()
+        return self.models.get(model_type_lower, self.models[self.DEFAULT_MODEL])
 

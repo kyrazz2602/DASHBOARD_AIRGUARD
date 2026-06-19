@@ -92,6 +92,8 @@ export async function POST(request: Request) {
         co: Number(body.co),
         voc: Number(body.voc),
         suhu: Number(body.suhu),
+        operating_hours: Number(body.operating_hours ?? 0),
+        model_type: String(body.model_type ?? "decision_tree"),
       }),
       signal: controller.signal,
     });

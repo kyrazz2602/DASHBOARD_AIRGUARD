@@ -1,7 +1,7 @@
 """
 Python FastAPI microservice for air filter condition estimation.
 
-Loads a trained scikit-learn model (.pkl) and StandardScaler (.pkl) on startup,
+Loads trained regression models (Decision Tree & Random Forest) and scaler on startup,
 then serves predictions via POST /predict.
 """
 
@@ -10,12 +10,12 @@ import os
 import sys
 import time
 from contextlib import asynccontextmanager
-from typing import Any
+from typing import Any, List, Dict
 
 import numpy as np
 import pandas as pd
-from fastapi import FastAPI, Request
-from pydantic import BaseModel
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel, Field
 
 from model_loader import ModelLoader
 
@@ -34,7 +34,6 @@ logger = logging.getLogger(__name__)
 # Pydantic models
 # ---------------------------------------------------------------------------
 
-
 class HistoryItem(BaseModel):
     pm25: float
     pm10: float
@@ -52,6 +51,8 @@ class PredictRequest(BaseModel):
     suhu: float
     timestamp: str | None = None
     history: list[HistoryItem] | None = None
+    operating_hours: float = 0.0
+    model_type: str = "decision_tree"
 
 
 class PredictResponse(BaseModel):
@@ -61,6 +62,8 @@ class PredictResponse(BaseModel):
     confidence: float
     model_used: str
     latency_ms: float
+    predicted_rul_hours: float
+    filter_integrity_percent: float
 
 
 # ---------------------------------------------------------------------------
@@ -81,11 +84,11 @@ FEATURE_COLS = [
     "VOC_roll_mean", "VOC_roll_std", "VOC_roll_max",
     "PM25_PM10_ratio", "CO_VOC_ratio",
     "PM25_exceed", "PM10_exceed", "CO_exceed", "VOC_exceed", "Total_exceed",
-    "CPI", "Cumulative_Exposure"
+    "CPI", "Cumulative_Exposure", "Operating_Hours"
 ]
 
 
-def compute_features(history_df: pd.DataFrame) -> pd.DataFrame:
+def compute_features(history_df: pd.DataFrame, operating_hours: float) -> pd.DataFrame:
     df = history_df.copy()
     
     # Ensure correct column naming (handle potential lowercase / uppercase discrepancies)
@@ -153,6 +156,8 @@ def compute_features(history_df: pd.DataFrame) -> pd.DataFrame:
     # Cumulative Exposure
     df["Cumulative_Exposure"] = (df["PM25"].expanding().mean() +
                                   df["PM10"].expanding().mean()) / 2
+    
+    df["Operating_Hours"] = float(operating_hours)
                                   
     return df[FEATURE_COLS]
 
@@ -161,28 +166,31 @@ def compute_features(history_df: pd.DataFrame) -> pd.DataFrame:
 # Recommendation helper
 # ---------------------------------------------------------------------------
 
-
-def get_recommendation(status: str, request: PredictRequest) -> str:
-    """Return a human-readable recommendation based on predicted status and sensor values."""
-    if status == "Ganti Filter":
+def get_recommendation(status: str, request: PredictRequest, integrity: float) -> str:
+    """Return a human-readable recommendation based on predicted status, integrity, and sensor values."""
+    if status == "Bahaya":
+        if integrity < 30.0:
+            return "Kondisi Bahaya! Filter sudah melewati batas aman efektif (< 30%). Segera ganti filter."
         if request.pm25 > 75:
             return (
-                f"Segera ganti filter. PM2.5 sangat tinggi ({request.pm25:.1f} \u03bcg/m\u00b3). "
-                "Filter tidak lagi efektif menyaring partikel halus."
+                f"Kondisi Bahaya! PM2.5 sangat tinggi ({request.pm25:.1f} \u03bcg/m\u00b3). "
+                "Gunakan masker N95 dan hindari aktivitas outdoor."
             )
         elif request.pm10 > 150:
             return (
-                f"Segera ganti filter. PM10 melebihi batas aman ({request.pm10:.1f} \u03bcg/m\u00b3)."
+                f"Kondisi Bahaya! PM10 melebihi batas aman ({request.pm10:.1f} \u03bcg/m\u00b3)."
             )
         elif request.co > 9:
             return (
-                f"Segera ganti filter. Kadar CO berbahaya ({request.co:.1f} ppm). "
-                "Pastikan ventilasi ruangan."
+                f"Kondisi Bahaya! Kadar CO berbahaya ({request.co:.1f} ppm). "
+                "Pastikan ventilasi ruangan segera dibuka."
             )
         else:
-            return "Segera ganti filter. Beberapa parameter melebihi batas aman."
+            return "Kondisi Bahaya! Beberapa parameter melebihi batas aman kritis."
 
     if status == "Perhatian":
+        if 30.0 <= integrity < 70.0:
+            return "Perhatian: Efisiensi filter mulai menurun (kesehatan 30%-70%). Pertimbangkan penggantian filter dalam waktu dekat."
         return (
             "Pantau kondisi filter. Kualitas udara menurun \u2014 "
             "pertimbangkan penggantian filter dalam 2-4 minggu."
@@ -190,6 +198,38 @@ def get_recommendation(status: str, request: PredictRequest) -> str:
 
     # "Aman"
     return "Filter berfungsi normal. Kualitas udara dalam batas aman."
+
+
+def calculate_pseudo_probabilities(rul: float) -> dict[str, float]:
+    """Menghitung pseudo-probabilities berbasis RUL untuk transisi UI yang halus."""
+    rul = max(0.0, min(rul, 4320.0))
+    if rul >= 3024:
+        ratio = (rul - 3024) / (4320 - 3024)
+        p_aman = 0.7 + 0.3 * ratio
+        p_perhatian = 1.0 - p_aman
+        p_bahaya = 0.0
+    elif rul >= 1296:
+        if rul >= 2160:
+            ratio = (rul - 2160) / (3024 - 2160)
+            p_aman = 0.1 + 0.6 * ratio
+            p_perhatian = 0.8 - 0.5 * ratio
+            p_bahaya = 0.1 - 0.1 * ratio
+        else:
+            ratio = (rul - 1296) / (2160 - 1296)
+            p_aman = 0.1 * ratio
+            p_bahaya = 0.7 - 0.6 * ratio
+            p_perhatian = 1.0 - p_aman - p_bahaya
+    else:
+        ratio = rul / 1296
+        p_bahaya = 1.0 - 0.3 * ratio
+        p_perhatian = 1.0 - p_bahaya
+        p_aman = 0.0
+        
+    return {
+        "Aman": round(p_aman, 4),
+        "Perhatian": round(p_perhatian, 4),
+        "Bahaya": round(p_bahaya, 4)
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -202,7 +242,7 @@ async def lifespan(app: FastAPI):  # type: ignore[type-arg]
     try:
         loader = ModelLoader()
         app.state.loader = loader
-        logger.info("Model and scaler loaded successfully.")
+        logger.info("Models and scaler loaded successfully.")
     except FileNotFoundError as exc:
         logger.error("Failed to load model files: %s", exc)
         sys.exit(1)
@@ -214,22 +254,18 @@ async def lifespan(app: FastAPI):  # type: ignore[type-arg]
         if PSYCOPG2_AVAILABLE:
             try:
                 logger.info("Attempting connection to TimescaleDB...")
-                # Attempt to connect to the database (3-second timeout)
                 conn = psycopg2.connect(db_url, connect_timeout=3)
                 conn.close()
                 app.state.db_connected = True
                 logger.info("Successfully verified connection to TimescaleDB.")
             except Exception as exc:
                 logger.error("TimescaleDB connection failed on startup: %s", exc)
-                # DO NOT sys.exit(1) here to prevent backend crash!
         else:
             logger.warning("psycopg2 is not available; skipping database connection verification.")
     else:
         logger.info("No database connection configured (DATABASE_URL / TIMESCALE_URL is empty).")
 
     yield
-
-    # Cleanup (nothing to do for in-memory models)
 
 
 # ---------------------------------------------------------------------------
@@ -254,10 +290,14 @@ async def health() -> dict[str, Any]:
                 db_status = "disconnected"
         else:
             db_status = "driver_missing"
-    else:
-        db_status = "not configured"
 
-    return {"status": "ok", "database": db_status}
+    loader: ModelLoader = app.state.loader
+    return {
+        "status": "ok", 
+        "database": db_status, 
+        "available_models": loader.AVAILABLE_MODELS, 
+        "default_model": loader.DEFAULT_MODEL
+    }
 
 
 @app.post("/predict", response_model=PredictResponse)
@@ -265,10 +305,14 @@ async def predict(request: PredictRequest) -> Any:
     start_ms = time.perf_counter() * 1000
 
     loader: ModelLoader = app.state.loader
-    model = loader.model
-    scaler = loader.scaler
+    
+    # 1. Select active model
+    model = loader.get_model(request.model_type)
+    model_used = request.model_type.lower()
+    if model_used not in loader.AVAILABLE_MODELS:
+        model_used = loader.DEFAULT_MODEL
 
-    # Construct history data
+    # 2. Construct history data
     raw_history = []
     
     if request.history and len(request.history) > 0:
@@ -282,8 +326,7 @@ async def predict(request: PredictRequest) -> Any:
                 "suhu": item.suhu,
                 "timestamp": item.timestamp
             })
-        # Check if the current reading is already the last item in history,
-        # otherwise append it to make sure we predict the most current state
+        # Check if current reading is in history, otherwise append it
         last_item = raw_history[-1]
         if not (
             abs(last_item["pm25"] - request.pm25) < 1e-5 and
@@ -311,7 +354,6 @@ async def predict(request: PredictRequest) -> Any:
             "timestamp": request.timestamp
         }
         with history_lock:
-            # Avoid duplicate entries if the client polls too fast with identical values
             if len(sensor_history_queue) == 0 or not (
                 abs(sensor_history_queue[-1]["pm25"] - current_item["pm25"]) < 1e-5 and
                 abs(sensor_history_queue[-1]["pm10"] - current_item["pm10"]) < 1e-5 and
@@ -325,28 +367,31 @@ async def predict(request: PredictRequest) -> Any:
     # Build DataFrame
     history_df = pd.DataFrame(raw_history)
 
-    # Compute 28 features
-    features_df = compute_features(history_df)
+    # Compute 29 features
+    features_df = compute_features(history_df, request.operating_hours)
 
     # We want to predict for the last item (the current state)
     current_features = features_df.iloc[[-1]]
 
-    # Scale features using the same scaler used during training
-    scaled = scaler.transform(current_features.values)
+    # Scaler is NOT needed for tree models (DT / RF). We do direct prediction.
+    predicted_rul = float(model.predict(current_features.values)[0])
 
-    # Predict class index and per-class probabilities
-    predicted_idx: int = int(model.predict(scaled)[0])
-    raw_proba: np.ndarray = model.predict_proba(scaled)[0]
+    # Clamp RUL to physical limits
+    predicted_rul = max(0.0, min(predicted_rul, 4320.0))
+    integrity = (predicted_rul / 4320.0) * 100.0
 
-    # Decode label using ModelLoader (handles translation of new class labels)
-    status = loader.decode_label(predicted_idx)
+    # Determine status label
+    if integrity >= 70.0:
+        status = "Aman"
+    elif integrity >= 30.0:
+        status = "Perhatian"
+    else:
+        status = "Bahaya"
 
-    # Build probabilities dict keyed by decoded label
-    probabilities: dict[str, float] = {
-        loader.decode_label(i): float(raw_proba[i]) for i in range(len(raw_proba))
-    }
+    # Calculate probabilities from RUL
+    probabilities = calculate_pseudo_probabilities(predicted_rul)
 
-    # Calculate rule-based guardrail (aligned with auto fan control thresholds)
+    # Calculate rule-based safety override
     pm25_val = float(current_features["PM25"].iloc[0])
     pm10_val = float(current_features["PM10"].iloc[0])
     co_val = float(current_features["CO"].iloc[0])
@@ -355,31 +400,25 @@ async def predict(request: PredictRequest) -> Any:
     total_exceed_val = int(current_features["Total_exceed"].iloc[0])
 
     if pm25_val > 125.4 or pm10_val > 354.0 or co_val > 50.0 or voc_val > 100.0:
-        rule_status = "Ganti Filter"
+        rule_status = "Bahaya"
     elif pm25_val > 35.4 or pm10_val > 154.0 or co_val > 15.0 or voc_val > 20.0:
         rule_status = "Perhatian"
     else:
         rule_status = "Aman"
 
-    # AI Guardrail check: if actual sensor values exceed safe limits, override to prevent false negatives
-    severity = {"Aman": 0, "Perhatian": 1, "Ganti Filter": 2}
+    # AI Guardrail override
+    severity = {"Aman": 0, "Perhatian": 1, "Bahaya": 2}
     if severity[rule_status] > severity[status]:
-        logger.info(f"Guardrail trigger: overriding model prediction '{status}' with '{rule_status}' due to active warning/danger parameters (PM2.5: {pm25_val}, PM10: {pm10_val}, CPI: {cpi_val:.3f}, Exceedances: {total_exceed_val})")
+        logger.info(f"Guardrail trigger: overriding status '{status}' with '{rule_status}' due to active parameters.")
         status = rule_status
-        # Re-distribute probabilities: assign 100% to the overridden status
         probabilities = {
             "Aman": 1.0 if status == "Aman" else 0.0,
             "Perhatian": 1.0 if status == "Perhatian" else 0.0,
-            "Ganti Filter": 1.0 if status == "Ganti Filter" else 0.0
+            "Bahaya": 1.0 if status == "Bahaya" else 0.0
         }
 
     confidence = float(max(probabilities.values()))
-
-    # Derive model name from class name
-    model_used = type(model).__name__.lower()
-
-    recommendation = get_recommendation(status, request)
-
+    recommendation = get_recommendation(status, request, integrity)
     latency_ms = time.perf_counter() * 1000 - start_ms
 
     return PredictResponse(
@@ -389,4 +428,6 @@ async def predict(request: PredictRequest) -> Any:
         confidence=confidence,
         model_used=model_used,
         latency_ms=latency_ms,
+        predicted_rul_hours=round(predicted_rul, 2),
+        filter_integrity_percent=round(integrity, 2)
     )

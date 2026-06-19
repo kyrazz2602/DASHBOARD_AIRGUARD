@@ -54,11 +54,11 @@
   --background: oklch(0.1 0.05 250); /* Biru dongker sangat gelap */
   --foreground: oklch(0.95 0.02 240);
 
-  /* Glass Components: Biru gelap transparan */
-  --card: oklch(0.15 0.08 250 / 0.5);
+  /* Glass Components: Biru gelap transparan (sedikit lebih gelap untuk kontras) */
+  --card: oklch(0.12 0.06 250 / 0.75);
   --card-foreground: oklch(0.95 0.02 240);
 
-  --popover: oklch(0.15 0.08 250 / 0.7);
+  --popover: oklch(0.12 0.06 250 / 0.85);
   --popover-foreground: oklch(0.95 0.02 240);
 
   /* Primary: Neon Blue */
@@ -69,7 +69,7 @@
   --secondary-foreground: oklch(0.95 0.02 240);
 
   --muted: oklch(0.2 0.05 250);
-  --muted-foreground: oklch(0.7 0.05 240);
+  --muted-foreground: oklch(0.82 0.03 240);
 
   --accent: oklch(0.3 0.15 250 / 0.4);
   --accent-foreground: oklch(0.985 0 0);

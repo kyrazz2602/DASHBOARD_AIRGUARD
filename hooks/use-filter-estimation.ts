@@ -120,6 +120,7 @@ export function useFilterEstimation() {
     daysRemaining: estimation.daysRemaining,
     resetFilter,
     isLoading,
-    error
+    error,
+    filterStartDate
   };
 }
