@@ -81,7 +81,7 @@ export default function LoginPage() {
               type="button"
               onClick={handleGoogleLogin}
               disabled={isLoading || isGoogleLoading}
-              className="w-full py-2.5 px-4 bg-background border border-input hover:bg-muted text-foreground font-semibold rounded-lg flex items-center justify-center gap-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+              className="w-full py-3 px-4 bg-background border border-input hover:bg-muted text-foreground font-semibold rounded-lg flex items-center justify-center gap-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm min-h-[44px]"
             >
               {isGoogleLoading ? (
                 <Loader2 className="w-5 h-5 animate-spin" />
@@ -178,7 +178,7 @@ export default function LoginPage() {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-4 top-3 text-muted-foreground hover:text-foreground transition-colors focus:outline-none"
+                  className="absolute right-1 top-1/2 -translate-y-1/2 p-2.5 rounded-lg text-muted-foreground hover:text-foreground transition-colors focus:outline-none min-h-[44px] min-w-[44px] flex items-center justify-center"
                   disabled={isLoading || isGoogleLoading}
                 >
                   {showPassword ? (
@@ -194,7 +194,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={isLoading || isGoogleLoading}
-              className="w-full mt-8 py-3 bg-primary text-primary-foreground font-semibold rounded-lg hover:bg-primary/90 shadow-md hover:shadow-lg transition-all disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2 active:scale-[0.98]"
+              className="w-full mt-8 py-3 bg-primary text-primary-foreground font-semibold rounded-lg hover:bg-primary/90 shadow-md hover:shadow-lg transition-all disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2 active:scale-[0.98] min-h-[44px]"
             >
               {isLoading ? (
                 <>

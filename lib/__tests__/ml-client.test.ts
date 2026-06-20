@@ -16,8 +16,8 @@ const anySensorFeatures = fc.record<SensorFeatures>({
 });
 
 // ---------------------------------------------------------------------------
-// Arbitrary: generates SensorFeatures that trigger "Ganti Filter"
-// (at least one threshold exceeded: pm25 > 125.4 OR pm10 > 354 OR co > 50 OR voc > 2.2)
+// Arbitrary: generates SensorFeatures that trigger "Bahaya"
+// (at least one threshold exceeded: pm25 > 125.4 OR pm10 > 354 OR co > 50 OR voc > 100)
 // ---------------------------------------------------------------------------
 const gantiFeaturesArb = fc.oneof(
   // pm25 > 125.4
@@ -108,7 +108,7 @@ const amanFeaturesArb = fc.record<SensorFeatures>({
 // ---------------------------------------------------------------------------
 // Valid status set
 // ---------------------------------------------------------------------------
-const VALID_STATUSES = new Set(["Aman", "Perhatian", "Ganti Filter"]);
+const VALID_STATUSES = new Set(["Aman", "Perhatian", "Bahaya"]);
 
 // ===========================================================================
 // Property 4: Rule-Based Fallback Always Returns Valid Status
@@ -148,10 +148,10 @@ describe("Property 4: Rule-Based Fallback Always Returns Valid Status", () => {
 // Validates: Requirements 7.2, 7.3, 7.4
 // ===========================================================================
 describe("Property 5: Rule-Based Threshold Consistency", () => {
-  it('returns "Ganti Filter" when pm25 > 125.4 OR pm10 > 354 OR co > 50 OR voc > 2.2', () => {
+  it('returns "Bahaya" when pm25 > 125.4 OR pm10 > 354 OR co > 50 OR voc > 100', () => {
     fc.assert(
       fc.property(gantiFeaturesArb, (features) => {
-        expect(getRuleBasedStatus(features)).toBe("Ganti Filter");
+        expect(getRuleBasedStatus(features)).toBe("Bahaya");
       }),
     );
   });
@@ -184,7 +184,7 @@ describe("Property 5: Rule-Based Threshold Consistency", () => {
     expect(getRuleBasedStatus(boundary)).toBe("Aman");
   });
 
-  it('returns "Perhatian" for exact Ganti Filter boundary values (pm25=125.4, pm10=354, co=50, voc=100)', () => {
+  it('returns "Perhatian" for exact Bahaya boundary values (pm25=125.4, pm10=354, co=50, voc=100)', () => {
     const boundary: SensorFeatures = {
       pm25: 125.4,
       pm10: 354,

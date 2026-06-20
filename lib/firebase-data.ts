@@ -23,6 +23,12 @@ export interface DeviceStatus {
   gerak: string;        // Arah gerak aktual ("MAJU", "MUNDUR", "KIRI", "KANAN", "DIAM")
   rpmKanan: number;     // Kecepatan putaran roda kanan (RPM)
   rpmKiri: number;      // Kecepatan putaran roda kiri (RPM)
+  x?: number;           // Posisi aktual X (meter)
+  y?: number;           // Posisi aktual Y (meter)
+  yaw?: number;         // Sudut hadap aktual (yaw, radian)
+  linear_velocity?: number;
+  angular_velocity?: number;
+  navigation_status?: string;
 }
 
 /**
@@ -110,6 +116,12 @@ export function listenToDeviceStatus(
           gerak: String(data.gerak || "DIAM"),
           rpmKanan: Number(data.rpmKanan || 0),
           rpmKiri: Number(data.rpmKiri || 0),
+          x: data.x !== undefined ? Number(data.x) : undefined,
+          y: data.y !== undefined ? Number(data.y) : undefined,
+          yaw: data.yaw !== undefined ? Number(data.yaw) : undefined,
+          linear_velocity: data.linear_velocity !== undefined ? Number(data.linear_velocity) : undefined,
+          angular_velocity: data.angular_velocity !== undefined ? Number(data.angular_velocity) : undefined,
+          navigation_status: data.navigation_status !== undefined ? String(data.navigation_status) : undefined,
         });
       }
     },
@@ -247,8 +259,15 @@ export async function setNavigationMode(isAuto: boolean): Promise<void> {
     updatedAt: Date.now(),
   });
 
-  const robotModeRef = ref(database, "robot/control/mode");
-  await set(robotModeRef, isAuto ? "autonomous" : "manual");
+  try {
+    const robotModeRef = ref(database, "robot/control/mode");
+    await set(robotModeRef, isAuto ? "autonomous" : "manual");
+  } catch (err) {
+    console.warn(
+      "[Firebase] Failed to write to robot/control/mode (probably Firebase Rules restriction):",
+      err
+    );
+  }
 }
 
 /**
@@ -268,10 +287,11 @@ export async function setGerakCommand(gerak: string): Promise<void> {
  * @param y Posisi target sumbu Y (meter)
  */
 export async function sendNavGoal(x: number, y: number): Promise<void> {
-  const goalXRef = ref(database, `${COMMAND_PATH}/goal_x`);
-  const goalYRef = ref(database, `${COMMAND_PATH}/goal_y`);
-  await set(goalXRef, x);
-  await set(goalYRef, y);
+  const commandRef = ref(database, COMMAND_PATH);
+  await update(commandRef, {
+    goal_x: x,
+    goal_y: y,
+  });
 }
 
 /**

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Download, Square, Circle, Calendar, Activity, Info } from "lucide-react";
@@ -13,7 +13,7 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
-  Tooltip,
+  Tooltip as ChartTooltip,
   ResponsiveContainer,
   ReferenceLine,
   Label,
@@ -21,6 +21,12 @@ import {
 import { generateHistoricalData, getStatusLabel, WHO_STANDARDS } from "@/lib/sensor-data";
 import { getHistoricalData, listenToSensorData } from "@/lib/firebase-data";
 import { cn } from "@/lib/utils";
+import { useIsMobile } from "@/hooks/use-mobile";
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+} from "@/components/ui/tooltip";
 
 // ─── Sensor config ────────────────────────────────────────────────────────────
 
@@ -61,7 +67,7 @@ const SENSOR_CONFIG = {
     label: "Gabungan",
     color: "#6366F1",
     unit: "",
-    description: "Grafik komparatif real-time yang memadukan seluruh parameter kualitas udara",
+    description: "Grafik komparatif real-time (PM2.5 & PM10: μg/m³, CO & VOC: ppm)",
     min: 0,
     max: 100,
   },
@@ -253,6 +259,7 @@ function generateSimulatedData(range: "1h" | "3d" | "7d"): DataRow[] {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function ChartSection() {
+  const isMobile = useIsMobile();
   const [timeRange, setTimeRange] = useState<"1h" | "3d" | "7d">("1h");
   const [selectedSensor, setSelectedSensor] = useState<SensorType>("pm25");
   const [chartData, setChartData] = useState<DataRow[]>([]);
@@ -613,6 +620,8 @@ export function ChartSection() {
        : WHO_STANDARDS.VOC.safe)
     : null;
 
+
+
   const formatXAxis = (ts: number) => {
     const d = new Date(ts);
     return timeRange === "1h"
@@ -690,7 +699,7 @@ export function ChartSection() {
                 <Button
                   onClick={stopAndExport}
                   size="sm"
-                  className="text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white gap-1.5 shadow-sm"
+                  className="text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white gap-1.5 shadow-sm min-h-[44px] sm:min-h-0 py-2.5 sm:py-1.5"
                 >
                   <Download className="w-3 h-3" />
                   Export CSV
@@ -698,22 +707,29 @@ export function ChartSection() {
                 <Button
                   onClick={stopRecordingOnly}
                   size="sm"
-                  className="text-xs font-semibold bg-red-500 hover:bg-red-600 text-white gap-1.5 shadow-sm"
+                  className="text-xs font-semibold bg-red-500 hover:bg-red-600 text-white gap-1.5 shadow-sm min-h-[44px] sm:min-h-0 py-2.5 sm:py-1.5"
                 >
                   <Square className="w-3 h-3 fill-current" />
                   Stop Recording
                 </Button>
               </div>
             ) : (
-              <Button
-                onClick={startRecording}
-                size="sm"
-                variant="outline"
-                className="text-xs font-semibold border-red-400/40 text-red-600 dark:text-red-400 hover:bg-red-500/10 gap-1.5"
-              >
-                <Circle className="w-3 h-3 fill-current" />
-                Rekam CSV
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    onClick={startRecording}
+                    size="sm"
+                    variant="outline"
+                    className="text-xs font-semibold border-red-400/40 text-red-600 dark:text-red-400 hover:bg-red-500/10 gap-1.5 min-h-[44px] sm:min-h-0 py-2.5 sm:py-1.5"
+                  >
+                    <Circle className="w-3 h-3 fill-current" />
+                    Rekam CSV
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="bg-card text-foreground border border-border shadow-lg p-2.5 max-w-[280px] text-center leading-normal">
+                  Klik <span className="font-semibold text-primary">Rekam CSV</span> untuk mulai merekam data real-time dari Firebase. Data tersimpan setiap update (~3 detik).
+                </TooltipContent>
+              </Tooltip>
             )
           ) : (
             // Historical mode: snapshot export
@@ -721,7 +737,7 @@ export function ChartSection() {
               onClick={exportSnapshot}
               size="sm"
               variant="outline"
-              className="text-xs font-semibold border-border hover:bg-muted gap-1.5 text-foreground"
+              className="text-xs font-semibold border-border hover:bg-muted gap-1.5 text-foreground min-h-[44px] sm:min-h-0 py-2.5 sm:py-1.5"
             >
               <Download className="w-3 h-3" />
               Export CSV
@@ -743,7 +759,7 @@ export function ChartSection() {
                 key={s}
                 onClick={() => setSelectedSensor(s)}
                 className={cn(
-                  "px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all duration-200",
+                  "px-3 py-2.5 sm:py-1.5 rounded-lg text-xs font-semibold border transition-all duration-200 min-h-[44px] sm:min-h-0 flex items-center justify-center",
                   selectedSensor === s
                     ? "text-white border-transparent shadow-sm scale-105"
                     : "bg-muted/50 border-border text-muted-foreground hover:text-foreground hover:bg-muted",
@@ -792,7 +808,7 @@ export function ChartSection() {
                       }))
                     }
                     className={cn(
-                      "px-2 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1.5 border transition-all duration-150",
+                      "px-3 py-2 sm:py-1 rounded-lg text-xs sm:text-[10px] font-bold flex items-center gap-1.5 border transition-all duration-150 min-h-[44px] sm:min-h-0",
                       active
                         ? "bg-card text-foreground shadow-xs"
                         : "bg-muted/10 border-dashed border-border/60 text-muted-foreground/50 hover:text-muted-foreground",
@@ -824,7 +840,7 @@ export function ChartSection() {
                 key={r}
                 onClick={() => setTimeRange(r)}
                 className={cn(
-                  "px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all duration-200",
+                  "px-3 py-2.5 sm:py-1.5 rounded-lg text-xs font-semibold border transition-all duration-200 min-h-[44px] sm:min-h-0 flex items-center justify-center",
                   timeRange === r
                     ? "border-primary/50 bg-primary/10 text-primary dark:text-primary"
                     : "bg-muted/50 border-border text-muted-foreground hover:text-foreground hover:bg-muted",
@@ -868,7 +884,7 @@ export function ChartSection() {
           {selectedSensor === "all" ? (
             <LineChart
               data={chartData}
-              margin={{ top: 8, right: 8, left: -20, bottom: 0 }}
+              margin={{ top: 10, right: 10, left: 15, bottom: 10 }}
             >
               <CartesianGrid
                 strokeDasharray="3 3"
@@ -889,7 +905,7 @@ export function ChartSection() {
                 axisLine={false}
                 dy={8}
                 interval="preserveStartEnd"
-                minTickGap={40}
+                minTickGap={isMobile ? 65 : 40}
               />
 
               <YAxis
@@ -902,9 +918,19 @@ export function ChartSection() {
                 axisLine={false}
                 dx={-8}
                 domain={[0, "auto"]}
-              />
+              >
+                <Label
+                  value="Konsentrasi (μg/m³ / ppm)"
+                  angle={-90}
+                  position="insideLeft"
+                  offset={-5}
+                  style={{ textAnchor: "middle" }}
+                  fill="currentColor"
+                  className="text-muted-foreground font-semibold text-[11px] select-none"
+                />
+              </YAxis>
 
-              <Tooltip content={<CustomTooltip />} />
+              <ChartTooltip content={<CustomTooltip />} />
 
               {visibleLines.pm25 && (
                 <ReferenceLine
@@ -1035,7 +1061,7 @@ export function ChartSection() {
           ) : (
             <AreaChart
               data={chartData}
-              margin={{ top: 8, right: 8, left: -20, bottom: 0 }}
+              margin={{ top: 10, right: 10, left: 15, bottom: 10 }}
             >
               <defs>
                 <linearGradient
@@ -1069,7 +1095,7 @@ export function ChartSection() {
                 axisLine={false}
                 dy={8}
                 interval="preserveStartEnd"
-                minTickGap={40}
+                minTickGap={isMobile ? 65 : 40}
               />
 
               <YAxis
@@ -1082,9 +1108,19 @@ export function ChartSection() {
                 axisLine={false}
                 dx={-8}
                 domain={[config.min, "auto"]}
-              />
+              >
+                <Label
+                  value={`Konsentrasi (${config.unit})`}
+                  angle={-90}
+                  position="insideLeft"
+                  offset={-5}
+                  style={{ textAnchor: "middle" }}
+                  fill="currentColor"
+                  className="text-muted-foreground font-semibold text-[11px] select-none"
+                />
+              </YAxis>
 
-              <Tooltip content={<CustomTooltip />} />
+              <ChartTooltip content={<CustomTooltip />} />
 
               {safeLimit !== null && (
                 <ReferenceLine
@@ -1124,19 +1160,9 @@ export function ChartSection() {
       </div>
 
       {/* ── Recording hint ── */}
-      {isLive && !isRecording && (
+      {isLive && !isRecording && selectedSensor === "all" && (
         <p className="text-[11px] text-muted-foreground text-center mt-3 animate-in fade-in duration-200">
-          {selectedSensor === "all" ? (
-            <span>
-              Parameter memiliki satuan berbeda (ppm / μg/m³). Gunakan filter tombol di atas untuk memfokuskan grafik.
-            </span>
-          ) : (
-            <span>
-              Klik <span className="font-semibold text-foreground">Rekam CSV</span>{" "}
-              untuk mulai merekam data real-time dari Firebase. Data tersimpan
-              setiap update (~3 detik).
-            </span>
-          )}
+          Parameter memiliki satuan berbeda (ppm / μg/m³). Gunakan filter tombol di atas untuk memfokuskan grafik.
         </p>
       )}
       {isRecording && (
@@ -1150,7 +1176,7 @@ export function ChartSection() {
       <div className="mt-4 pt-4 border-t border-border/40">
         <button
           onClick={() => setShowGuide(!showGuide)}
-          className="text-xs font-semibold text-primary hover:underline flex items-center gap-1.5 focus:outline-none"
+          className="text-xs font-semibold text-primary hover:underline flex items-center gap-1.5 focus:outline-none min-h-[44px] py-2"
         >
           <Info className="w-3.5 h-3.5" />
           {showGuide ? "Sembunyikan Panduan Kualitas Udara" : "Tampilkan Panduan Kualitas Udara & Batas Ambang WHO"}

@@ -27,7 +27,7 @@ export class MLServiceError extends Error {
  * Rule-based fallback for filter status classification.
  *
  * Postconditions:
- * - Returns "Ganti Filter" if pm25 > 125.4 OR pm10 > 354 OR co > 50 OR voc > 100
+ * - Returns "Bahaya" if pm25 > 125.4 OR pm10 > 354 OR co > 50 OR voc > 100
  * - Returns "Perhatian" if pm25 > 35.4 OR pm10 > 154 OR co > 15 OR voc > 20
  * - Returns "Aman" for all other conditions
  * - Never throws, never returns null
@@ -35,9 +35,9 @@ export class MLServiceError extends Error {
 export function getRuleBasedStatus(features: SensorFeatures): FilterStatus {
   const { pm25, pm10, co, voc } = features;
 
-  // Check "Ganti Filter" threshold (most severe — check first)
+  // Check "Bahaya" threshold (most severe — check first)
   if (pm25 > 125.4 || pm10 > 354 || co > 50 || voc > 100) {
-    return "Ganti Filter";
+    return "Bahaya";
   }
 
   // Check "Perhatian" threshold
@@ -85,6 +85,8 @@ export function extractFeatures(sensorData: {
  */
 export async function predictFilterStatus(
   features: SensorFeatures,
+  operatingHours: number = 0,
+  modelType: string = "decision_tree",
 ): Promise<MLPredictionResult> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 5000);
@@ -99,6 +101,8 @@ export async function predictFilterStatus(
         co: features.co,
         voc: features.voc,
         suhu: features.suhu,
+        operating_hours: operatingHours,
+        model_type: modelType,
       }),
       signal: controller.signal,
     });
@@ -140,7 +144,7 @@ export async function predictFilterStatus(
     const probabilities: FilterProbabilities = {
       aman: data.probabilities["Aman"] ?? 0,
       perhatian: data.probabilities["Perhatian"] ?? 0,
-      gantiFilter: data.probabilities["Ganti Filter"] ?? 0,
+      bahaya: data.probabilities["Bahaya"] ?? 0,
     };
 
     const result: MLPredictionResult = {
@@ -151,6 +155,8 @@ export async function predictFilterStatus(
       modelUsed: data.model_used,
       latencyMs: data.latency_ms,
       predictedAt: new Date(),
+      predictedRulHours: data.predicted_rul_hours,
+      filterIntegrityPercent: data.filter_integrity_percent,
     };
 
     return result;

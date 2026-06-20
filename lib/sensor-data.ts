@@ -125,12 +125,12 @@ export function detectRecommendedFanSpeed(data: SensorReading): FanSpeed {
 
 // ML Filter Estimation Types
 
-export type FilterStatus = "Aman" | "Perhatian" | "Ganti Filter";
+export type FilterStatus = "Aman" | "Perhatian" | "Bahaya";
 
 export interface FilterProbabilities {
   aman: number; // 0-1
   perhatian: number; // 0-1
-  gantiFilter: number; // 0-1
+  bahaya: number; // 0-1
 }
 
 export interface SensorFeatures {
@@ -149,4 +149,7 @@ export interface MLPredictionResult {
   modelUsed: string;
   latencyMs: number;
   predictedAt: Date;
+  predictedRulHours: number;
+  filterIntegrityPercent: number;
 }
+

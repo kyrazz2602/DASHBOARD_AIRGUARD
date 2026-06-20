@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Target, Keyboard, X, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { setGerakCommand, listenToLidarData, setNavigationMode } from "@/lib/firebase-data";
+import { setGerakCommand, setNavigationMode, listenToDeviceStatus } from "@/lib/firebase-data";
 
 // ── Color Palette ─────────────────────────────────────────────────────────────
 const C = {
@@ -26,6 +26,7 @@ const GERAK_MAP: Record<"up" | "down" | "left" | "right", string> = {
 interface RemoteControlModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onSwitchToAuto?: () => void;
 }
 
 // ── CSS 3D Radar ──────────────────────────────────────────────────────────────
@@ -33,22 +34,19 @@ function RadarView({
   posX,
   posY,
   activeDir,
-  lidarDistance,
-  lidarError,
+  deviceStatus,
   className,
   style,
 }: {
   posX: number;
   posY: number;
   activeDir: string | null;
-  lidarDistance: number | null;
-  lidarError: string | null;
+  deviceStatus: any;
   className?: string;
   style?: React.CSSProperties;
 }) {
   const dotX = 50 + posX * 0.35;
   const dotY = 50 + posY * 0.35;
-  const isObstacleClose = lidarDistance !== null && lidarDistance > 0 && lidarDistance < 40;
 
   // Continuous position update while a direction is held
   // (handled in parent via RAF, posX/posY already updated)
@@ -104,37 +102,49 @@ function RadarView({
         </div>
       </div>
 
-      <div
-        className="absolute bottom-2 left-1/2 -translate-x-1/2 z-20 font-mono text-[10px] whitespace-nowrap"
-        style={{ color: `${C.neon}99` }}
-      ></div>
-
-      {/* Live LiDAR Distance display */}
-      <div className="absolute top-3 left-3 lg:top-4 lg:left-4 z-20 font-mono text-xs flex flex-col gap-1">
-        <div className="flex items-center gap-1.5">
-          <span className={cn("w-2 h-2 rounded-full", lidarDistance !== null && !lidarError ? "bg-emerald-500 animate-pulse" : "bg-red-500")} />
-          <span style={{ color: `${C.neon}dd` }}>Sensor Jarak (LiDAR): {lidarError ? "OFFLINE" : "AKTIF"}</span>
+      {/* Live Telemetry Display */}
+      <div className="absolute top-3 right-3 lg:top-4 lg:right-4 z-20 flex flex-col gap-2 p-3 rounded-xl bg-slate-950/85 border border-slate-800 text-[11px] font-mono text-slate-300 min-w-[140px] shadow-lg shadow-black/50 pointer-events-none">
+        <div className="text-[10px] text-cyan-400 font-bold uppercase tracking-wider border-b border-slate-800 pb-1 flex items-center justify-between">
+          <span>Telemetri Gerak</span>
+          <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping" />
         </div>
-        {lidarError ? (
-          <span className="text-red-500 text-[10px] max-w-[180px] break-words">
-            {lidarError.includes("permission-denied") || lidarError.includes("Akses Ditolak")
-              ? "Akses Ditolak (Perlu Hak Akses)"
-              : `Gagal tersambung: ${lidarError}`}
-          </span>
-        ) : lidarDistance !== null ? (
-          <div className="flex flex-col">
-            <span className={cn("text-base font-bold", isObstacleClose ? "text-red-500 animate-pulse" : "text-emerald-400")}>
-              {lidarDistance > 0 ? `${lidarDistance.toFixed(1)} cm` : "Tidak ada rintangan"}
-            </span>
-            {isObstacleClose && (
-              <span className="text-red-500 text-[9px] font-bold animate-pulse">
-                ⚠️ PERINGATAN: Rintangan Sangat Dekat!
-              </span>
-            )}
+        
+        <div className="space-y-1.5 text-[10px]">
+          <div className="flex justify-between gap-4">
+            <span className="text-slate-400">Arah Rill:</span>
+            <span className="font-bold text-cyan-300">{deviceStatus?.gerak ?? "DIAM"}</span>
           </div>
-        ) : (
-          <span className="text-muted-foreground">Menghubungkan...</span>
-        )}
+          <div className="flex justify-between gap-4">
+            <span className="text-slate-400">Status:</span>
+            <span className={cn("font-bold", activeDir ? "text-emerald-400 animate-pulse" : "text-slate-400")}>
+              {activeDir ? "BERGERAK" : "DIAM"}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Compass Dial Indicator */}
+      <div className="absolute bottom-3 right-3 lg:bottom-4 lg:right-4 z-20 flex flex-col items-center justify-center p-2 rounded-xl bg-slate-950/80 border border-slate-800 text-[10px] font-mono text-slate-300 shadow-lg shadow-black/50 pointer-events-none select-none">
+        <div className="relative w-14 h-14 rounded-full border border-slate-850 flex items-center justify-center bg-black/40">
+          <span className="absolute top-1 text-[7px] text-red-500 font-bold">N</span>
+          <span className="absolute bottom-1 text-[7px] text-slate-500">S</span>
+          <span className="absolute left-1 text-[7px] text-slate-500">W</span>
+          <span className="absolute right-1 text-[7px] text-slate-500">E</span>
+          
+          {/* Compass needle */}
+          <div 
+            className="w-1.5 h-10 bg-gradient-to-b from-red-500 via-slate-300 to-slate-500 rounded transition-transform duration-300"
+            style={{
+              transform: `rotate(${
+                deviceStatus?.gerak === "KIRI" ? -90 :
+                deviceStatus?.gerak === "KANAN" ? 90 :
+                deviceStatus?.gerak === "MUNDUR" ? 180 :
+                0
+              }deg)`
+            }}
+          />
+        </div>
+        <span className="mt-1 text-[8px] text-slate-400 uppercase tracking-widest font-semibold">Compass</span>
       </div>
     </div>
   );
@@ -144,10 +154,12 @@ function RadarView({
 function DPad({
   onPressStart,
   onPressEnd,
+  onStop,
   activeDir,
 }: {
   onPressStart: (dir: "up" | "down" | "left" | "right") => void;
   onPressEnd: () => void;
+  onStop: () => void;
   activeDir: string | null;
 }) {
   const SIZE = 200;
@@ -233,6 +245,10 @@ function DPad({
             <stop offset="0%" stopColor={C.fillAct} />
             <stop offset="100%" stopColor={C.fill} />
           </radialGradient>
+          <radialGradient id="arc-fill-active" cx="50%" cy="30%" r="70%">
+            <stop offset="0%" stopColor="#00F2FF" stopOpacity="0.45" />
+            <stop offset="100%" stopColor={C.fillAct} />
+          </radialGradient>
         </defs>
 
         <circle
@@ -267,9 +283,15 @@ function DPad({
               style={{ cursor: "pointer", userSelect: "none" }}
               filter={act ? "url(#glow-on)" : "url(#glow-idle)"}
             >
+              {/* Invisible wider hit path to expand touch target size (covers 29px-105px range) */}
+              <path
+                d={arcPath(29, 105, a1 - 4, a2 + 4)}
+                fill="transparent"
+                style={{ cursor: "pointer" }}
+              />
               <path
                 d={arcPath(innerR, outerR, a1, a2)}
-                fill={act ? C.fillAct : "url(#arc-fill)"}
+                fill={act ? "url(#arc-fill-active)" : "url(#arc-fill)"}
                 stroke={stroke}
                 strokeWidth={act ? "2.4" : "2"}
               />
@@ -282,6 +304,19 @@ function DPad({
           );
         })}
       </svg>
+
+      {/* Emergency STOP Button in the center (fully responsive, meets touch requirements) */}
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onStop();
+        }}
+        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-14 h-14 rounded-full bg-red-650 hover:bg-red-555 text-white font-black text-xs uppercase flex items-center justify-center border-2 border-white shadow-[0_0_15px_rgba(239,68,68,0.8)] active:scale-95 transition-all z-30 min-h-[44px] min-w-[44px] cursor-pointer"
+        title="EMERGENCY STOP (Space)"
+      >
+        STOP
+      </button>
     </div>
   );
 }
@@ -290,16 +325,23 @@ function DPad({
 export function RemoteControlModal({
   isOpen,
   onClose,
+  onSwitchToAuto,
 }: RemoteControlModalProps) {
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [activeDir, setActiveDir] = useState<
     "up" | "down" | "left" | "right" | null
   >(null);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [lidarDistance, setLidarDistance] = useState<number | null>(null);
-  const [lidarError, setLidarError] = useState<string | null>(null);
 
-  // Subscribe to real-time LiDAR distance and initialize manual mode
+  // Status state from Firebase
+  const [deviceStatus, setDeviceStatus] = useState<{
+    kipas: string;
+    gerak: string;
+    rpmKiri: number;
+    rpmKanan: number;
+  } | null>(null);
+
+  // Initialize manual mode and subscribe to status
   useEffect(() => {
     if (!isOpen) return;
 
@@ -308,19 +350,18 @@ export function RemoteControlModal({
       console.error("[RemoteControl] Failed to set manual navigation mode:", error);
     });
 
-    setLidarError(null);
-    const unsubscribe = listenToLidarData(
-      (data) => {
-        setLidarDistance(data.jarak_terdekat_cm);
-        setLidarError(null);
+    // Subscribe to actual robot device status (RPM and movement)
+    const unsubscribeStatus = listenToDeviceStatus(
+      (status) => {
+        setDeviceStatus(status);
       },
       (error) => {
-        console.error("Firebase LiDAR listener error:", error);
-        setLidarError(error.message);
+        console.error("Firebase Device Status error:", error);
       }
     );
+
     return () => {
-      unsubscribe();
+      unsubscribeStatus();
     };
   }, [isOpen]);
 
@@ -396,6 +437,13 @@ export function RemoteControlModal({
     setGerakCommand("DIAM").catch(console.error);
   }, []);
 
+  // ── Emergency STOP ────────────────────────────────────────────────────────
+  const handleStop = useCallback(() => {
+    activeDirRef.current = null;
+    setActiveDir(null);
+    setGerakCommand("DIAM").catch(console.error);
+  }, []);
+
   // ── Keyboard: keydown = press start, keyup = press end ───────────────────
   useEffect(() => {
     if (!isOpen) return;
@@ -419,10 +467,21 @@ export function RemoteControlModal({
       if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key))
         e.preventDefault();
       if (e.repeat) return;
+      
+      // Emergency STOP on Space
+      if (e.key === " " || e.key === "Spacebar") {
+        e.preventDefault();
+        handleStop();
+        return;
+      }
+      
+      // Emergency STOP and close on Escape
       if (e.key === "Escape") {
+        handleStop();
         onClose();
         return;
       }
+      
       const dir = KEY_MAP[e.key];
       if (dir) handlePressStart(dir);
     };
@@ -438,7 +497,7 @@ export function RemoteControlModal({
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
     };
-  }, [isOpen, handlePressStart, handlePressEnd, onClose]);
+  }, [isOpen, handlePressStart, handlePressEnd, handleStop, onClose]);
 
   // ── Cleanup on close ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -457,7 +516,7 @@ export function RemoteControlModal({
     >
       {/* Header */}
       <div
-        className="flex items-center justify-between px-3 py-2.5 lg:px-4 lg:py-3 shrink-0 backdrop-blur-md"
+        className="flex items-center justify-between px-3 py-2 sm:px-4 sm:py-3 shrink-0 backdrop-blur-md"
         style={{
           background: `${C.bgAlt}ee`,
           borderBottom: `1px solid ${C.neon}22`,
@@ -466,31 +525,46 @@ export function RemoteControlModal({
         <div className="flex items-center gap-2 min-w-0">
           <Target className="w-4 h-4 shrink-0" style={{ color: C.neon }} />
           <span
-            className="font-bold tracking-wider text-xs lg:text-sm uppercase truncate max-w-[50vw] lg:max-w-none"
+            className="font-bold tracking-wider text-xs lg:text-sm uppercase truncate hidden xs:inline"
             style={{ color: C.neon }}
           >
-            Remote Control Robot (Manual)
+            Kontrol Manual
           </span>
           {/* Sync indicator */}
           {isSyncing && (
             <span
-              className="w-1.5 h-1.5 rounded-full animate-pulse shrink-0"
-              style={{ background: C.neon }}
+              className="w-1.5 h-1.5 rounded-full animate-pulse shrink-0 bg-[#00F2FF]"
             />
           )}
           {/* Active direction label */}
           {activeDir && (
             <span
-              className="text-[9px] lg:text-[10px] font-mono px-1.5 py-0.5 rounded shrink-0"
-              style={{ background: `${C.neon}18`, color: C.neon }}
+              className="text-[9px] lg:text-[10px] font-mono px-1.5 py-0.5 rounded shrink-0 bg-cyan-950 text-cyan-300 border border-cyan-800"
             >
               {GERAK_MAP[activeDir]}
             </span>
           )}
         </div>
+
+        {/* Mode Switcher Tabs */}
+        <div className="flex items-center gap-1 bg-black/60 p-1 rounded-lg border border-slate-800/80 text-[10px] font-bold uppercase tracking-wider">
+          <button
+            onClick={onSwitchToAuto}
+            className="px-2.5 py-1 rounded text-slate-400 hover:text-slate-200 transition-all bg-transparent border-0 cursor-pointer font-bold uppercase"
+          >
+            Rute Otomatis (A*)
+          </button>
+          <span 
+            className="px-2.5 py-1 rounded font-bold transition-all"
+            style={{ background: C.fill, color: C.neon }}
+          >
+            Kontrol Manual
+          </span>
+        </div>
+
         <button
           onClick={onClose}
-          className="p-1.5 rounded-lg transition-colors shrink-0"
+          className="p-3 sm:p-1.5 min-h-[44px] sm:min-h-0 min-w-[44px] sm:min-w-0 flex items-center justify-center rounded-lg transition-colors shrink-0"
           style={{ color: `${C.neon}88` }}
           onMouseEnter={(e) => (e.currentTarget.style.color = C.neon)}
           onMouseLeave={(e) => (e.currentTarget.style.color = `${C.neon}88`)}
@@ -500,14 +574,13 @@ export function RemoteControlModal({
       </div>
 
       {/* Body */}
-      <div className="flex-1 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden">
+      <div className="flex-1 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden relative">
         {/* Radar */}
         <RadarView
           posX={position.x}
           posY={position.y}
           activeDir={activeDir}
-          lidarDistance={lidarDistance}
-          lidarError={lidarError}
+          deviceStatus={deviceStatus}
           className="flex-1 w-full min-h-[30vh] lg:min-h-0"
         />
 
@@ -517,8 +590,7 @@ export function RemoteControlModal({
           style={{ background: C.bgAlt, borderColor: `${C.neon}18` }}
         >
           <p
-            className="text-[10px] lg:text-[11px] uppercase tracking-widest font-semibold"
-            style={{ color: `${C.neon}66` }}
+            className="text-[10px] lg:text-[11px] uppercase tracking-widest font-bold text-slate-200"
           >
             Tahan untuk bergerak
           </p>
@@ -526,16 +598,20 @@ export function RemoteControlModal({
           <DPad
             onPressStart={handlePressStart}
             onPressEnd={handlePressEnd}
+            onStop={handleStop}
             activeDir={activeDir}
           />
 
           {/* Keyboard hint */}
           <div
-            className="hidden lg:flex items-center gap-2 text-[10px]"
-            style={{ color: `${C.neon}33` }}
+            className="hidden lg:flex flex-col gap-1 items-center text-[10px] text-center"
+            style={{ color: `${C.neon}cc` }}
           >
-            <Keyboard className="w-3 h-3" />
-            <span>Tahan tombol arah Panah / WASD di keyboard</span>
+            <div className="flex items-center gap-2 font-semibold">
+              <Keyboard className="w-3.5 h-3.5" />
+              <span>Tahan tombol arah Panah / WASD</span>
+            </div>
+            <span className="text-[9px] text-slate-400">Tekan [Space] untuk Stop Darurat</span>
           </div>
         </div>
       </div>

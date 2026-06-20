@@ -35,6 +35,11 @@ export interface MLFilterEstimationResult {
 
   // Rule-based fallback (always available)
   ruleBasedStatus: FilterStatus;
+
+  selectedModel: string;
+  setSelectedModel: (model: string) => void;
+  predictedRulHours: number | null;
+  filterIntegrityPercent: number | null;
 }
 
 // ─── Cache helper ────────────────────────────────────────────────────────────
@@ -74,7 +79,7 @@ export function useMLFilterEstimation(): MLFilterEstimationResult {
   // ── 8.1 State initialization ──────────────────────────────────────────────
 
   const { data: sensorData } = useSensorData();
-  const { healthPct, daysRemaining, resetFilter, isLoading, error: estimationError } =
+  const { healthPct, daysRemaining, resetFilter, isLoading, error: estimationError, filterStartDate } =
     useFilterEstimation();
 
   const [mlStatus, setMlStatus] = useState<FilterStatus | null>(null);
@@ -86,10 +91,17 @@ export function useMLFilterEstimation(): MLFilterEstimationResult {
   const [isPredicting, setIsPredicting] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
+  // New RUL regression states
+  const [selectedModel, setSelectedModel] = useState<string>("decision_tree");
+  const [predictedRulHours, setPredictedRulHours] = useState<number | null>(null);
+  const [filterIntegrityPercent, setFilterIntegrityPercent] = useState<number | null>(null);
+
   // ── 8.3 Prediction cache ──────────────────────────────────────────────────
 
   /** Stores the SensorFeatures used in the last successful prediction. */
   const lastFeatures = useRef<SensorFeatures | null>(null);
+  /** Stores the model name used in the last successful prediction. */
+  const lastModel = useRef<string | null>(null);
   /** Tracks whether ML is currently known to be unavailable (for retry logic). */
   const mlUnavailable = useRef<boolean>(false);
 
@@ -106,6 +118,7 @@ export function useMLFilterEstimation(): MLFilterEstimationResult {
           // Service recovered — reset state so next sensor change triggers prediction
           mlUnavailable.current = false;
           lastFeatures.current = null;
+          lastModel.current = null;
           setIsMLAvailable(true);
         }
       } catch {
@@ -147,31 +160,40 @@ export function useMLFilterEstimation(): MLFilterEstimationResult {
 
       const features = extractFeatures(sensorData);
 
+      // ── Calculate operating hours from filterStartDate
+      const operatingHours = filterStartDate
+        ? Math.max(0, (Date.now() - filterStartDate) / (1000 * 60 * 60))
+        : 0.0;
+
       // ── 8.3 Cache check ────────────────────────────────────────────────────
       if (
         lastFeatures.current !== null &&
+        lastModel.current === selectedModel &&
         isCacheValid(features, lastFeatures.current) &&
         !mlUnavailable.current
       ) {
-        // Sensor values haven't changed significantly — reuse cached prediction
+        // Sensor values and selected model haven't changed significantly — reuse cached prediction
         return;
       }
 
       setIsPredicting(true);
 
       try {
-        const result = await predictFilterStatus(features);
+        const result = await predictFilterStatus(features, operatingHours, selectedModel);
 
         setMlStatus(result.status);
         setProbabilities(result.probabilities);
         setRecommendation(result.recommendation);
         setConfidence(result.confidence);
+        setPredictedRulHours(result.predictedRulHours);
+        setFilterIntegrityPercent(result.filterIntegrityPercent);
         setIsMLAvailable(true);
         mlUnavailable.current = false;
         setError(null);
 
         // Update cache after a successful prediction
         lastFeatures.current = features;
+        lastModel.current = selectedModel;
       } catch (err) {
         if (err instanceof MLServiceError) {
           if (err.code === "SERVICE_UNAVAILABLE" || err.code === "TIMEOUT") {
@@ -179,6 +201,8 @@ export function useMLFilterEstimation(): MLFilterEstimationResult {
             mlUnavailable.current = true;
             setIsMLAvailable(false);
             setMlStatus(getRuleBasedStatus(features));
+            setPredictedRulHours(null);
+            setFilterIntegrityPercent(null);
           } else if (err.code === "INVALID_INPUT") {
             setError(err.message);
           }
@@ -188,13 +212,20 @@ export function useMLFilterEstimation(): MLFilterEstimationResult {
       }
     }, 2000);
 
-    // Clean up the pending timeout when sensorData changes or component unmounts
+    // Clean up the pending timeout when sensorData or selectedModel changes or component unmounts
     return () => {
       clearTimeout(timeoutId);
     };
-  }, [sensorData]);
+  }, [sensorData, selectedModel, filterStartDate]);
 
-  // ── 8.4 Return shape ──────────────────────────────────────────────────────
+  // ── 8.4 Override with ML predictions when online
+  const finalHealthPct = (isMLAvailable && filterIntegrityPercent !== null)
+    ? filterIntegrityPercent
+    : healthPct;
+
+  const finalDaysRemaining = (isMLAvailable && predictedRulHours !== null)
+    ? Math.round(predictedRulHours / 24)
+    : daysRemaining;
 
   return {
     // ML prediction state
@@ -206,13 +237,18 @@ export function useMLFilterEstimation(): MLFilterEstimationResult {
     isPredicting,
     error: error || estimationError,
 
-    // From useFilterEstimation (never null)
-    healthPct,
-    daysRemaining,
+    // Overridden or fallback estimation values
+    healthPct: finalHealthPct,
+    daysRemaining: finalDaysRemaining,
     isLoading,
     resetFilter,
 
     // Rule-based fallback — always computed, never null
     ruleBasedStatus: getRuleBasedStatus(extractFeatures(sensorData)),
+
+    selectedModel,
+    setSelectedModel,
+    predictedRulHours,
+    filterIntegrityPercent,
   };
 }

@@ -2,6 +2,7 @@ import { Card } from "@/components/ui/card";
 import { getStatusLabel } from "@/lib/sensor-data";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Check, AlertTriangle, AlertCircle } from "lucide-react";
 
 interface SensorCardProps {
   label: string;
@@ -15,7 +16,26 @@ interface SensorCardProps {
 
 const STATUS_STYLES = {
   Safe: {
-    dot: "bg-emerald-500 dark:bg-emerald-400",
+    icon: <Check className="w-3 h-3 stroke-[3px]" />,
+    dot: "text-emerald-500 dark:text-emerald-400",
+    text: "text-emerald-700 dark:text-emerald-300",
+    value: "text-emerald-700 dark:text-emerald-300",
+    glow: "hover:shadow-emerald-500/15 hover:border-emerald-400/50",
+    iconBg: "group-hover:bg-emerald-100 dark:group-hover:bg-emerald-900/30",
+    iconColor: "group-hover:text-emerald-600 dark:group-hover:text-emerald-400",
+  },
+  Normal: {
+    icon: <Check className="w-3 h-3 stroke-[3px]" />,
+    dot: "text-emerald-500 dark:text-emerald-400",
+    text: "text-emerald-700 dark:text-emerald-300",
+    value: "text-emerald-700 dark:text-emerald-300",
+    glow: "hover:shadow-emerald-500/15 hover:border-emerald-400/50",
+    iconBg: "group-hover:bg-emerald-100 dark:group-hover:bg-emerald-900/30",
+    iconColor: "group-hover:text-emerald-600 dark:group-hover:text-emerald-400",
+  },
+  N: {
+    icon: <Check className="w-3 h-3 stroke-[3px]" />,
+    dot: "text-emerald-500 dark:text-emerald-400",
     text: "text-emerald-700 dark:text-emerald-300",
     value: "text-emerald-700 dark:text-emerald-300",
     glow: "hover:shadow-emerald-500/15 hover:border-emerald-400/50",
@@ -23,7 +43,8 @@ const STATUS_STYLES = {
     iconColor: "group-hover:text-emerald-600 dark:group-hover:text-emerald-400",
   },
   Warning: {
-    dot: "bg-amber-500 dark:bg-amber-400",
+    icon: <AlertTriangle className="w-3 h-3 stroke-[3px]" />,
+    dot: "text-amber-500 dark:text-amber-400",
     text: "text-amber-700 dark:text-amber-300",
     value: "text-amber-700 dark:text-amber-300",
     glow: "hover:shadow-amber-500/15 hover:border-amber-400/50",
@@ -31,7 +52,8 @@ const STATUS_STYLES = {
     iconColor: "group-hover:text-amber-600 dark:group-hover:text-amber-400",
   },
   Danger: {
-    dot: "bg-red-500 dark:bg-red-400",
+    icon: <AlertCircle className="w-3 h-3 stroke-[3px]" />,
+    dot: "text-red-500 dark:text-red-400",
     text: "text-red-700 dark:text-red-300",
     value: "text-red-700 dark:text-red-300",
     glow: "hover:shadow-red-500/15 hover:border-red-400/50",
@@ -44,6 +66,8 @@ const STATUS_ID: Record<string, string> = {
   Safe: "Aman",
   Warning: "Perhatian",
   Danger: "Bahaya",
+  Normal: "Aman",
+  N: "Aman",
 };
 
 export function SensorCard({
@@ -108,28 +132,25 @@ export function SensorCard({
       </div>
 
       {/* Value */}
-      <div className="mb-3 transition-transform duration-300 group-hover:scale-[1.02] origin-left">
+      <div className="mb-3 flex items-baseline flex-wrap gap-0.5 transition-transform duration-300 group-hover:scale-[1.02] origin-left">
         <span
           className={cn(
-            "text-2xl sm:text-3xl font-bold tabular-nums leading-none",
+            "text-[28px] font-bold tabular-nums leading-none",
             styles.value,
           )}
         >
           {value.toFixed(1)}
         </span>
-        <span className="text-xs text-muted-foreground ml-1.5 font-medium">
+        <span className="text-[13px] text-muted-foreground opacity-70 ml-1 font-semibold select-none shrink-0 w-fit">
           {unit}
         </span>
       </div>
 
       {/* Status dot + label */}
       <div className="flex items-center gap-1.5">
-        <span
-          className={cn(
-            "w-1.5 h-1.5 rounded-full shrink-0 transition-all duration-300 group-hover:scale-125",
-            styles.dot,
-          )}
-        />
+        <span className={cn("shrink-0 transition-transform duration-300 group-hover:scale-110", styles.dot)}>
+          {styles.icon}
+        </span>
         <span
           className={cn(
             "text-[11px] font-semibold transition-colors duration-300",

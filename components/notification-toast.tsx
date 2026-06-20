@@ -75,7 +75,9 @@ export function NotificationToast({
 
   useEffect(() => {
     if (visible) {
-      startTimer();
+      if (type !== "danger") {
+        startTimer();
+      }
     } else {
       // Cleanup jika komponen disembunyikan manual
       if (timerRef.current) clearTimeout(timerRef.current);
@@ -85,7 +87,7 @@ export function NotificationToast({
       if (timerRef.current) clearTimeout(timerRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible, duration, onClose]);
+  }, [visible, duration, onClose, type]);
 
   if (!visible) return null;
 
@@ -116,7 +118,7 @@ export function NotificationToast({
 
       <button
         onClick={onClose}
-        className="shrink-0 -mr-1 -mt-1 p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition-colors opacity-60 hover:opacity-100"
+        className="shrink-0 -mr-2 -mt-2 p-3 sm:p-1.5 min-h-[44px] sm:min-h-0 min-w-[44px] sm:min-w-0 flex items-center justify-center rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition-colors opacity-60 hover:opacity-100"
         aria-label="Close notification">
         <X className="w-4 h-4" />
       </button>

@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/context/auth-context";
 import { useTheme } from "next-themes";
+import { cn } from "@/lib/utils";
 import {
   LogOut,
   Menu,
@@ -15,9 +16,25 @@ import {
   LogIn,
   Sun,
   Moon,
+  Bell,
+  AlertTriangle,
+  TriangleAlert,
+  ShieldCheck,
 } from "lucide-react";
 
-export function Navbar() {
+export interface SensorAlert {
+  name: string;
+  value: number;
+  status: string;
+  unit: string;
+  isAlert?: boolean;
+}
+
+interface NavbarProps {
+  alerts?: SensorAlert[];
+}
+
+export function Navbar({ alerts }: NavbarProps = {}) {
   const { user, logout } = useAuth();
   const pathname = usePathname();
   const [isScrolled, setIsScrolled] = useState(false);
@@ -37,6 +54,97 @@ export function Navbar() {
     setMounted(true);
   }, []);
 
+  const [isNotifDropdownOpen, setIsNotifDropdownOpen] = useState(false);
+  const [isMobileNotifDropdownOpen, setIsMobileNotifDropdownOpen] = useState(false);
+  const notifRef = useRef<HTMLDivElement>(null);
+  const mobileNotifRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (notifRef.current && !notifRef.current.contains(event.target as Node)) {
+        setIsNotifDropdownOpen(false);
+      }
+      if (mobileNotifRef.current && !mobileNotifRef.current.contains(event.target as Node)) {
+        setIsMobileNotifDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const renderDropdownContent = () => (
+    <>
+      <div className="p-4 border-b border-border/50 dark:border-white/5 bg-muted/20 flex items-center justify-between">
+        <h4 className="font-extrabold text-[11px] text-foreground uppercase tracking-wider">
+          Notifikasi Parameter
+        </h4>
+        {alerts && alerts.length > 0 ? (
+          <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
+            {alerts.length} Parameter Tinggi
+          </span>
+        ) : (
+          <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+            Normal
+          </span>
+        )}
+      </div>
+
+      <div className="p-2.5 max-h-72 overflow-y-auto space-y-1.5">
+        {alerts && alerts.length > 0 ? (
+          alerts.map((alert) => (
+            <div
+              key={alert.name}
+              className={cn(
+                "flex items-center justify-between p-3 rounded-xl border transition-all duration-200",
+                alert.status === "Danger"
+                  ? "bg-rose-500/5 border-rose-500/15 text-rose-700 dark:text-rose-300"
+                  : "bg-amber-500/5 border-amber-500/15 text-amber-700 dark:text-amber-300"
+              )}
+            >
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className={cn(
+                  "w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border",
+                  alert.status === "Danger"
+                    ? "bg-rose-500/10 border-rose-500/20"
+                    : "bg-amber-500/10 border-amber-500/20"
+                )}>
+                  {alert.status === "Danger" ? (
+                    <TriangleAlert className="w-4 h-4 text-rose-500 animate-pulse" />
+                  ) : (
+                    <AlertTriangle className="w-4 h-4 text-amber-500" />
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-bold leading-tight text-foreground text-left">
+                    {alert.name}
+                  </p>
+                  <p className="text-[10px] opacity-70 mt-0.5 text-left">
+                    {alert.status === "Danger" ? "Bahaya" : "Perhatian"}
+                  </p>
+                </div>
+              </div>
+              <div className="text-right shrink-0">
+                <p className="text-xs font-extrabold text-foreground tabular-nums">
+                  {alert.value.toFixed(1)}
+                </p>
+                <p className="text-[9px] opacity-60 uppercase font-semibold">
+                  {alert.unit}
+                </p>
+              </div>
+            </div>
+          ))
+        ) : (
+          <div className="p-6 text-center text-muted-foreground flex flex-col items-center justify-center gap-2">
+            <ShieldCheck className="w-8 h-8 text-emerald-500/60" />
+            <div className="space-y-0.5">
+              <p className="text-xs font-bold text-foreground">Semua Parameter Aman</p>
+              <p className="text-[10px] opacity-75">Kualitas udara berada di tingkat optimal.</p>
+            </div>
+          </div>
+        )}
+      </div>
+    </>
+  );
   const navLinks = [
     { name: "About", href: "/home", icon: Info },
     ...(user
@@ -95,6 +203,36 @@ export function Navbar() {
                 )}
               </button>
 
+              {/* Notification Bell (Desktop) */}
+              {alerts && (
+                <div ref={notifRef} className="relative z-50 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setIsNotifDropdownOpen(!isNotifDropdownOpen)}
+                    className={cn(
+                      "relative p-2 rounded-lg transition-colors focus:outline-none active:scale-95",
+                      alerts.length > 0
+                        ? "bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 dark:text-amber-400 animate-[pulse_2.2s_infinite]"
+                        : "hover:bg-muted text-muted-foreground hover:text-foreground"
+                    )}
+                    title="Notifikasi"
+                  >
+                    <Bell className={cn("w-5 h-5", alerts.length > 0 && "animate-[bounce_2s_infinite]")} />
+                    {alerts.length > 0 && (
+                      <span className="absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white shadow-sm shadow-red-500/30">
+                        {alerts.length}
+                      </span>
+                    )}
+                  </button>
+
+                  {isNotifDropdownOpen && (
+                    <div className="absolute right-0 mt-2 w-80 rounded-2xl border border-border/60 dark:border-white/10 bg-card/95 shadow-2xl backdrop-blur-md overflow-hidden animate-in fade-in-0 zoom-in-95 duration-200">
+                      {renderDropdownContent()}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Separator */}
               <div className="h-6 w-px bg-border/60" />
 
@@ -130,7 +268,7 @@ export function Navbar() {
               <button
                 type="button"
                 onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-                className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                className="p-3 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
                 title="Toggle theme"
                 aria-label="Toggle theme"
               >
@@ -140,10 +278,41 @@ export function Navbar() {
                   <Moon className="w-5 h-5" />
                 )}
               </button>
+
+              {/* Notification Bell (Mobile) */}
+              {alerts && (
+                <div ref={mobileNotifRef} className="relative z-50 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setIsMobileNotifDropdownOpen(!isMobileNotifDropdownOpen)}
+                    className={cn(
+                      "relative p-3 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg transition-colors focus:outline-none active:scale-95",
+                      alerts.length > 0
+                        ? "bg-amber-500/10 text-amber-500 dark:text-amber-400 animate-[pulse_2.2s_infinite]"
+                        : "hover:bg-muted text-muted-foreground hover:text-foreground"
+                    )}
+                    title="Notifikasi"
+                  >
+                    <Bell className={cn("w-5 h-5", alerts.length > 0 && "animate-[bounce_2s_infinite]")} />
+                    {alerts.length > 0 && (
+                      <span className="absolute top-1.5 right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white shadow-sm shadow-red-500/30">
+                        {alerts.length}
+                      </span>
+                    )}
+                  </button>
+
+                  {isMobileNotifDropdownOpen && (
+                    <div className="absolute right-0 mt-2 w-72 sm:w-80 rounded-2xl border border-border/60 dark:border-white/10 bg-card/95 shadow-2xl backdrop-blur-md overflow-hidden animate-in fade-in-0 zoom-in-95 duration-200">
+                      {renderDropdownContent()}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {!user && (
                 <Link
                   href="/login"
-                  className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                  className="p-3 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
                   title="Sign In"
                 >
                   <LogIn className="w-5 h-5" />

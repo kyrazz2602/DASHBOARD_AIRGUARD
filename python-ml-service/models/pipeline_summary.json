@@ -1,0 +1,169 @@
+{
+  "pipeline_version": "2.0 (Regression)",
+  "date": "2026-06-15",
+  "features": [
+    "PM25",
+    "PM10",
+    "CO",
+    "VOC",
+    "Suhu",
+    "Hour",
+    "TimeMin",
+    "PM25_roll_mean",
+    "PM25_roll_std",
+    "PM25_roll_max",
+    "PM10_roll_mean",
+    "PM10_roll_std",
+    "PM10_roll_max",
+    "CO_roll_mean",
+    "CO_roll_std",
+    "CO_roll_max",
+    "VOC_roll_mean",
+    "VOC_roll_std",
+    "VOC_roll_max",
+    "PM25_PM10_ratio",
+    "CO_VOC_ratio",
+    "PM25_exceed",
+    "PM10_exceed",
+    "CO_exceed",
+    "VOC_exceed",
+    "Total_exceed",
+    "CPI",
+    "Cumulative_Exposure",
+    "Operating_Hours"
+  ],
+  "classes": [
+    "aman",
+    "perhatian",
+    "perlu penggantian filter"
+  ],
+  "who_standards": {
+    "PM25": {
+      "safe": 35.4,
+      "warning": 125.4,
+      "danger": 125.5
+    },
+    "PM10": {
+      "safe": 154.0,
+      "warning": 354.0,
+      "danger": 355.0
+    },
+    "CO": {
+      "safe": 15.0,
+      "warning": 50.0,
+      "danger": 50.0
+    },
+    "VOC": {
+      "safe": 20.0,
+      "warning": 100.0,
+      "danger": 100.0
+    }
+  },
+  "total_samples": 4568,
+  "real_samples": 2968,
+  "dummy_samples": 1600,
+  "train_test_split": "80/20 stratified by lifecycle",
+  "cv_folds": 5,
+  "baseline_metrics": {
+    "Decision Tree": {
+      "cv_r2": 0.9934430333483111,
+      "test_mae": 46.361012523395246,
+      "test_r2": 0.99504035275619
+    },
+    "Random Forest": {
+      "cv_r2": 0.9985140384759894,
+      "test_mae": 22.331716524594885,
+      "test_r2": 0.9982956912452602
+    }
+  },
+  "best_params": {
+    "decision_tree": {
+      "criterion": "squared_error",
+      "max_depth": "None",
+      "min_samples_leaf": "2",
+      "min_samples_split": "2"
+    },
+    "random_forest": {
+      "max_depth": "None",
+      "max_features": "sqrt",
+      "min_samples_leaf": "1",
+      "min_samples_split": "2",
+      "n_estimators": "200"
+    },
+    "ann": {
+      "units1": "256",
+      "units2": "128",
+      "units3": "64",
+      "dropout": "0.3",
+      "lr": "0.001"
+    }
+  },
+  "final_metrics": {
+    "Decision Tree": {
+      "MAE": 43.2895,
+      "MSE": 3726.756,
+      "R2": 0.9977,
+      "Class_Accuracy": 0.9858,
+      "Class_F1_Macro": 0.9861,
+      "Class_F1_Weighted": 0.9858
+    },
+    "Random Forest": {
+      "MAE": 170.4025,
+      "MSE": 56633.4885,
+      "R2": 0.9656,
+      "Class_Accuracy": 0.9705,
+      "Class_F1_Macro": 0.9714,
+      "Class_F1_Weighted": 0.9706
+    },
+    "ANN": {
+      "MAE": 106.6136,
+      "MSE": 49530.2223,
+      "R2": 0.9699,
+      "Class_Accuracy": 0.9628,
+      "Class_F1_Macro": 0.9631,
+      "Class_F1_Weighted": 0.9629
+    }
+  },
+  "ann_search_log": [
+    {
+      "units1": 256,
+      "units2": 128,
+      "units3": 64,
+      "dropout": 0.3,
+      "lr": 0.001,
+      "val_mae": 101.0125
+    },
+    {
+      "units1": 128,
+      "units2": 64,
+      "units3": 32,
+      "dropout": 0.25,
+      "lr": 0.001,
+      "val_mae": 1697.7701
+    },
+    {
+      "units1": 128,
+      "units2": 64,
+      "units3": 32,
+      "dropout": 0.3,
+      "lr": 0.0005,
+      "val_mae": 2125.3853
+    },
+    {
+      "units1": 64,
+      "units2": 32,
+      "units3": 16,
+      "dropout": 0.2,
+      "lr": 0.001,
+      "val_mae": 2117.2332
+    },
+    {
+      "units1": 256,
+      "units2": 128,
+      "units3": 64,
+      "dropout": 0.4,
+      "lr": 0.0005,
+      "val_mae": 1955.8109
+    }
+  ]
+}

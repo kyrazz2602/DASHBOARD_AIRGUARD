@@ -16,10 +16,23 @@ import {
   BatteryLow,
   BatteryMedium,
   BatteryFull,
+  // Icons added for premium UI/UX:
+  Clock,
+  ShieldCheck,
+  AlertOctagon,
+  Activity,
+  AlertTriangle,
+  Calendar,
+  HelpCircle
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import type { FilterStatus, FilterProbabilities } from "@/lib/sensor-data";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface MaintenanceWidgetProps {
   filterHealth?: number;
@@ -36,6 +49,10 @@ interface MaintenanceWidgetProps {
   isMLAvailable?: boolean;
   isPredicting?: boolean;
   error?: string | null;
+  selectedModel?: string;
+  onModelChange?: (model: string) => void;
+  predictedRulHours?: number | null;
+  filterIntegrityPercent?: number | null;
 }
 
 export function MaintenanceWidget({
@@ -53,6 +70,10 @@ export function MaintenanceWidget({
   isMLAvailable = false,
   isPredicting = false,
   error = null,
+  selectedModel = "decision_tree",
+  onModelChange,
+  predictedRulHours = null,
+  filterIntegrityPercent = null,
 }: MaintenanceWidgetProps) {
   const filterStatus = useMemo(() => {
     if (filterHealth > 70) {
@@ -61,31 +82,34 @@ export function MaintenanceWidget({
         label: "Filter Optimal",
         sublabel: "Berfungsi dengan baik",
         styles: {
-          icon: "text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-900/40",
-          text: "text-emerald-700 dark:text-emerald-300",
-          bar: "bg-gradient-to-r from-emerald-500 to-emerald-600",
+          icon: "text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-500/20 shadow-sm shadow-emerald-500/5",
+          text: "text-emerald-600 dark:text-emerald-400",
+          bar: "bg-gradient-to-r from-emerald-500 to-teal-400 shadow-[0_0_8px_rgba(16,185,129,0.3)]",
+          accentBar: "bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-400",
         },
       };
     } else if (filterHealth > 30) {
       return {
         icon: <AlertCircle className="w-4 h-4" />,
-        label: "Perlu Perhatian",
+        label: "Perhatian",
         sublabel: "Efisiensi menurun",
         styles: {
-          icon: "text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/40",
-          text: "text-amber-700 dark:text-amber-300",
-          bar: "bg-gradient-to-r from-amber-500 to-amber-600",
+          icon: "text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-100 dark:border-amber-500/20 shadow-sm shadow-amber-500/5",
+          text: "text-amber-600 dark:text-amber-400",
+          bar: "bg-gradient-to-r from-amber-500 to-orange-400 shadow-[0_0_8px_rgba(245,158,11,0.3)]",
+          accentBar: "bg-gradient-to-r from-amber-500 via-orange-500 to-amber-400",
         },
       };
     } else {
       return {
-        icon: <Wrench className="w-4 h-4" />,
+        icon: <Wrench className="w-4 h-4 animate-bounce" />,
         label: "Ganti Segera",
         sublabel: "Filter sudah tidak efektif",
         styles: {
-          icon: "text-red-700 dark:text-red-300 bg-red-100 dark:bg-red-900/40",
-          text: "text-red-700 dark:text-red-300",
-          bar: "bg-gradient-to-r from-red-500 to-red-600",
+          icon: "text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/30 border border-rose-100 dark:border-rose-500/20 shadow-sm shadow-rose-500/5",
+          text: "text-rose-600 dark:text-rose-400",
+          bar: "bg-gradient-to-r from-red-500 to-rose-400 shadow-[0_0_8px_rgba(239,68,68,0.3)]",
+          accentBar: "bg-gradient-to-r from-red-600 via-rose-600 to-red-500",
         },
       };
     }
@@ -95,19 +119,22 @@ export function MaintenanceWidget({
     if (batteryLevel > 50)
       return {
         icon: <BatteryFull className="w-4 h-4" />,
-        color: "text-emerald-700 dark:text-emerald-300",
-        bg: "bg-emerald-100 dark:bg-emerald-900/40",
+        color: "text-emerald-600 dark:text-emerald-400",
+        bg: "bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-500/10",
+        critical: false,
       };
-    if (batteryLevel > 20)
+    if (batteryLevel > 10)
       return {
         icon: <BatteryMedium className="w-4 h-4" />,
-        color: "text-amber-700 dark:text-amber-300",
-        bg: "bg-amber-100 dark:bg-amber-900/40",
+        color: "text-amber-600 dark:text-amber-400",
+        bg: "bg-amber-50 dark:bg-amber-950/30 border border-amber-100 dark:border-amber-500/10",
+        critical: false,
       };
     return {
-      icon: <BatteryLow className="w-4 h-4" />,
-      color: "text-red-700 dark:text-red-300",
-      bg: "bg-red-100 dark:bg-red-900/40",
+      icon: <BatteryLow className="w-4 h-4 animate-bounce" />,
+      color: "text-rose-600 dark:text-rose-400",
+      bg: "bg-rose-50 dark:bg-rose-950/30 border border-rose-100 dark:border-rose-500/10",
+      critical: true,
     };
   }, [batteryLevel]);
 
@@ -118,22 +145,22 @@ export function MaintenanceWidget({
         return {
           label: "Aman",
           styles:
-            "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300",
-          text: "text-emerald-700 dark:text-emerald-300",
+            "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-200/50 dark:border-emerald-500/20 shadow-[0_0_10px_rgba(16,185,129,0.1)]",
+          text: "text-emerald-600 dark:text-emerald-400",
         };
       case "Perhatian":
         return {
           label: "Perhatian",
           styles:
-            "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300",
-          text: "text-amber-700 dark:text-amber-300",
+            "bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 border border-amber-200/50 dark:border-amber-500/20 shadow-[0_0_10px_rgba(245,158,11,0.1)]",
+          text: "text-amber-600 dark:text-amber-400",
         };
-      case "Ganti Filter":
+      case "Bahaya":
         return {
-          label: "Ganti Filter",
+          label: "Bahaya",
           styles:
-            "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300",
-          text: "text-red-700 dark:text-red-300",
+            "bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-200/50 dark:border-rose-500/20 shadow-[0_0_10px_rgba(244,63,94,0.1)]",
+          text: "text-rose-600 dark:text-rose-400",
         };
     }
   }, [mlStatus]);
@@ -144,37 +171,55 @@ export function MaintenanceWidget({
       {
         label: "Aman",
         value: probabilities.aman,
-        bar: "bg-emerald-600 dark:bg-emerald-400",
-        text: "text-emerald-700 dark:text-emerald-300",
+        icon: <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />,
+        bar: "bg-gradient-to-r from-emerald-500 to-teal-400 shadow-[0_0_8px_rgba(16,185,129,0.3)]",
+        text: "text-emerald-600 dark:text-emerald-400",
+        activeBg: "bg-emerald-500/5 dark:bg-emerald-500/10 border-emerald-500/20",
       },
       {
-        label: "Perlu Perhatian",
+        label: "Perhatian",
         value: probabilities.perhatian,
-        bar: "bg-amber-600 dark:bg-amber-400",
-        text: "text-amber-700 dark:text-amber-300",
+        icon: <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" />,
+        bar: "bg-gradient-to-r from-amber-500 to-orange-400 shadow-[0_0_8px_rgba(245,158,11,0.3)]",
+        text: "text-amber-600 dark:text-amber-400",
+        activeBg: "bg-amber-500/5 dark:bg-amber-500/10 border-amber-500/20",
       },
       {
-        label: "Ganti Filter",
-        value: probabilities.gantiFilter,
-        bar: "bg-red-600 dark:bg-red-400",
-        text: "text-red-700 dark:text-red-300",
+        label: "Bahaya",
+        value: probabilities.bahaya,
+        icon: <AlertOctagon className="w-3.5 h-3.5 text-rose-500 shrink-0" />,
+        bar: "bg-gradient-to-r from-red-500 to-rose-400 shadow-[0_0_8px_rgba(244,63,94,0.3)]",
+        text: "text-rose-600 dark:text-rose-400",
+        activeBg: "bg-rose-500/5 dark:bg-rose-500/10 border-rose-500/20",
       },
     ];
   }, [probabilities]);
 
+  const dominantLabel = useMemo(() => {
+    if (!probabilities) return null;
+    const maxVal = Math.max(probabilities.aman, probabilities.perhatian, probabilities.bahaya);
+    if (maxVal === probabilities.aman) return "Aman";
+    if (maxVal === probabilities.perhatian) return "Perhatian";
+    return "Bahaya";
+  }, [probabilities]);
+
   return (
-    <Card className="overflow-hidden border border-border shadow-sm bg-card">
-      {/* ── Header ── */}
-      <div className="px-5 pt-5 pb-4">
-        <div className="flex items-center justify-between gap-3">
+    <div className="space-y-6">
+      {/* ── Card 1: Kesehatan & Status Filter ── */}
+      <Card className="overflow-hidden border border-white/5 dark:border-white/10 shadow-2xl bg-gradient-to-b from-card/85 via-card/90 to-card/95 backdrop-blur-md relative hover:shadow-[0_0_30px_rgba(59,130,246,0.06)] transition-all duration-300">
+        {/* Top dynamic accent bar */}
+        <div className={cn("h-1 w-full absolute top-0 left-0 transition-all duration-500", filterStatus.styles.accentBar)} />
+
+        {/* Header */}
+        <div className="px-5 pt-6 pb-4">
           <div className="flex items-center gap-3">
-            <div className={cn("p-2 rounded-xl", filterStatus.styles.icon)}>
+            <div className={cn("p-2 rounded-xl transition-all duration-500", filterStatus.styles.icon)}>
               {filterStatus.icon}
             </div>
             <div>
               <p
                 className={cn(
-                  "text-sm font-semibold leading-tight",
+                  "text-sm font-bold leading-tight transition-colors duration-500",
                   filterStatus.styles.text,
                 )}
               >
@@ -185,230 +230,368 @@ export function MaintenanceWidget({
               </p>
             </div>
           </div>
+        </div>
 
-          {/* ML badge */}
-          {isMLAvailable && mlStatus && mlStatusConfig ? (
+        {/* Filter Integrity / Kesehatan */}
+        <div className="px-5 pb-5 space-y-2.5">
+          <div className="flex justify-between items-center">
+            <span className="text-xs font-semibold text-muted-foreground">
+              Kesehatan & Integritas Filter
+            </span>
             <span
               className={cn(
-                "inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold shrink-0",
-                mlStatusConfig.styles,
+                "text-sm font-extrabold tabular-nums transition-colors duration-500",
+                filterStatus.styles.text,
               )}
             >
-              <Brain className="w-3 h-3" />
-              {mlStatusConfig.label}
-            </span>
-          ) : !isMLAvailable ? (
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-muted text-muted-foreground shrink-0">
-              <WifiOff className="w-3 h-3" />
-              ML Offline
-            </span>
-          ) : null}
-        </div>
-      </div>
-
-      {/* ── Filter Integrity ── */}
-      <div className="px-5 pb-4 space-y-2">
-        <div className="flex justify-between items-center">
-          <span className="text-xs font-medium text-muted-foreground">
-            Kesehatan & Integritas Filter
-          </span>
-          <span
-            className={cn(
-              "text-sm font-bold tabular-nums",
-              filterStatus.styles.text,
-            )}
-          >
-            {filterHealth}%
-          </span>
-        </div>
-        <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
-          <div
-            className={cn(
-              "h-full rounded-full transition-all duration-700 ease-out",
-              filterStatus.styles.bar,
-            )}
-            style={{ width: `${filterHealth}%` }}
-          />
-        </div>
-        <div className="flex justify-between items-center pt-0.5">
-          <span className="text-[11px] text-muted-foreground">
-            Estimasi sisa:{" "}
-            <span className="font-semibold text-foreground">
-              {daysRemaining} hari
-            </span>
-          </span>
-          {onResetFilter && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onResetFilter}
-              disabled={isLoading}
-              className="h-7 text-xs px-3 gap-1.5 rounded-lg"
-            >
-              {isLoading ? (
-                <Loader2 className="w-3 h-3 animate-spin" />
-              ) : (
-                <RefreshCcw className="w-3 h-3" />
-              )}
-              Reset
-            </Button>
-          )}
-        </div>
-      </div>
-
-      <div className="h-px bg-border mx-5" />
-
-      {/* ── ML Prediction ── */}
-      <div className="px-5 py-4 space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5">
-            <Brain className="w-3.5 h-3.5 text-muted-foreground" />
-            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-              Prediksi AI / ML
+              {filterHealth}%
             </span>
           </div>
-          {isMLAvailable && confidence !== null && (
-            <span className="text-[11px] text-muted-foreground">
-              Keyakinan AI (Akurasi){" "}
-              <span className="font-semibold text-foreground">
-                {(confidence * 100).toFixed(0)}%
+          <div className="h-2 w-full bg-slate-200 dark:bg-slate-800/80 rounded-full overflow-hidden">
+            <div
+              className={cn(
+                "h-full rounded-full transition-all duration-700 ease-out",
+                filterStatus.styles.bar,
+              )}
+              style={{ width: `${filterHealth}%` }}
+            />
+          </div>
+          <div className="flex justify-between items-center pt-0.5">
+            <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+              <Calendar className="w-3.5 h-3.5 text-muted-foreground" />
+              <span>Estimasi sisa:</span>
+              <span className="font-bold text-foreground ml-0.5">
+                {daysRemaining} hari
               </span>
             </span>
-          )}
-        </div>
-
-        {/* Error notification */}
-        {error && (
-          <div className="flex items-start gap-2.5 p-3 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive animate-in fade-in slide-in-from-top-1 duration-200">
-            <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
-            <div className="space-y-0.5">
-              <p className="text-xs font-bold leading-none">
-                Peringatan Sistem
-              </p>
-              <p className="text-[10px] opacity-90 leading-normal">
-                {error}
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* ML offline */}
-        {!isMLAvailable && (
-          <div className="flex items-center gap-2.5 p-3 rounded-xl bg-muted/60 border border-border">
-            <WifiOff className="w-4 h-4 text-muted-foreground shrink-0" />
-            <div>
-              <p className="text-xs font-semibold text-foreground">
-                Sistem AI Offline
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* Loading skeleton */}
-        {isMLAvailable && isPredicting && (
-          <div className="space-y-2.5 animate-pulse">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="space-y-1">
-                <div className="flex justify-between">
-                  <div className="h-3 bg-muted rounded w-16" />
-                  <div className="h-3 bg-muted rounded w-8" />
-                </div>
-                <div className="h-1.5 bg-muted rounded-full w-full" />
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Probability bars */}
-        {isMLAvailable && !isPredicting && probabilityBars && (
-          <div className="space-y-2.5">
-            {probabilityBars.map((bar) => (
-              <div key={bar.label} className="space-y-1">
-                <div className="flex justify-between items-center">
-                  <span className={cn("text-xs font-medium", bar.text)}>
-                    {bar.label}
-                  </span>
-                  <span
-                    className={cn("text-xs font-bold tabular-nums", bar.text)}
-                  >
-                    {(bar.value * 100).toFixed(0)}%
-                  </span>
-                </div>
-                <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
-                  <div
-                    className={cn(
-                      "h-full rounded-full transition-all duration-700 ease-out",
-                      bar.bar,
-                    )}
-                    style={{ width: `${(bar.value * 100).toFixed(0)}%` }}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Recommendation */}
-        {isMLAvailable && !isPredicting && recommendation && (
-          <div className="flex gap-2.5 p-3 rounded-xl bg-muted/60 border border-border">
-            <Sparkles className="w-3.5 h-3.5 text-muted-foreground mt-0.5 shrink-0" />
-            <p className="text-[11px] text-muted-foreground leading-relaxed">
-              {recommendation}
-            </p>
-          </div>
-        )}
-
-        {/* Footnote */}
-        {isMLAvailable && !isPredicting && (
-          <p className="text-[10px] text-muted-foreground leading-normal italic pl-1">
-            * Model Random Forest memprediksi status kelayakan filter berdasarkan parameter PM2.5, PM10, CO, VOC, Suhu, serta riwayat polusi secara real-time.
-          </p>
-        )}
-      </div>
-
-      <div className="h-px bg-border mx-5" />
-
-      {/* ── Stats ── */}
-      <div className="px-5 py-4 grid grid-cols-2 gap-3">
-        <div className="flex items-center gap-3 p-3 rounded-xl bg-muted/50 border border-border">
-          <div className="p-1.5 rounded-lg bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 shrink-0">
-            <Thermometer className="w-4 h-4" />
-          </div>
-          <div className="min-w-0">
-            <p className="text-[11px] text-muted-foreground font-medium">
-              Suhu
-            </p>
-            <p className="text-sm font-bold text-foreground leading-tight">
-              {Number(temperature).toFixed(1)}°C
-            </p>
+            {onResetFilter && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onResetFilter}
+                disabled={isLoading}
+                className="h-auto min-h-[44px] sm:min-h-0 sm:h-7 py-2.5 sm:py-0 text-xs px-3 gap-1.5 rounded-lg flex items-center justify-center border-border/80 hover:bg-accent hover:text-accent-foreground dark:border-white/10 dark:hover:bg-white/5 active:scale-95 transition-all cursor-pointer font-semibold"
+              >
+                {isLoading ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <RefreshCcw className="w-3.5 h-3.5" />
+                )}
+                Reset
+              </Button>
+            )}
           </div>
         </div>
 
-        <div className="flex items-center gap-3 p-3 rounded-xl bg-muted/50 border border-border">
+        <div className="h-px bg-border/60 dark:bg-white/5 mx-5" />
+
+        {/* Stats */}
+        <div className="px-5 py-4 grid grid-cols-2 gap-3">
+          {/* Temperature Card */}
+          <div className="flex items-center gap-3 p-3 rounded-xl bg-muted/30 dark:bg-slate-900/40 border border-border/80 dark:border-white/5 hover:scale-[1.02] hover:shadow-md transition-all duration-300">
+            <div className="p-1.5 rounded-lg bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-500/15 shrink-0 animate-pulse">
+              <Thermometer className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[11px] text-muted-foreground font-bold leading-tight">
+                Suhu
+              </p>
+              <p className="text-sm font-extrabold text-foreground leading-tight mt-0.5">
+                {Number(temperature).toFixed(1)}°C
+              </p>
+            </div>
+          </div>
+
+          {/* Battery Card */}
           <div
             className={cn(
-              "p-1.5 rounded-lg shrink-0",
-              batteryConfig.bg,
-              batteryConfig.color,
+              "flex items-center gap-3 p-3 rounded-xl bg-muted/30 dark:bg-slate-900/40 border border-border/80 dark:border-white/5 hover:scale-[1.02] hover:shadow-md transition-all duration-300",
+              batteryConfig.critical && "ring-2 ring-rose-500/30 dark:ring-rose-500/20 bg-rose-500/5 dark:bg-rose-950/10"
             )}
           >
-            {batteryConfig.icon}
-          </div>
-          <div className="min-w-0">
-            <p className="text-[11px] text-muted-foreground font-medium">
-              Baterai
-            </p>
-            <p
+            <div
               className={cn(
-                "text-sm font-bold leading-tight",
+                "p-1.5 rounded-lg shrink-0 border transition-all duration-300",
+                batteryConfig.bg,
                 batteryConfig.color,
               )}
             >
-              {batteryLevel}%
-            </p>
+              {batteryConfig.icon}
+            </div>
+            <div className="min-w-0">
+              <p className="text-[11px] text-muted-foreground font-bold leading-tight">
+                Baterai
+              </p>
+              <p
+                className={cn(
+                  "text-sm font-extrabold leading-tight mt-0.5",
+                  batteryConfig.color,
+                )}
+              >
+                {batteryLevel}%
+              </p>
+              {batteryConfig.critical && (
+                <p className="text-[8px] font-extrabold text-rose-500 dark:text-rose-400 tracking-wider uppercase animate-pulse mt-0.5">
+                  Segera Cas
+                </p>
+              )}
+            </div>
           </div>
         </div>
-      </div>
-    </Card>
+      </Card>
+
+      {/* ── Card 2: Analisis & Prediksi AI/ML ── */}
+      <Card className="overflow-hidden border border-white/5 dark:border-white/10 shadow-2xl bg-gradient-to-b from-card/85 via-card/90 to-card/95 backdrop-blur-md relative hover:shadow-[0_0_30px_rgba(59,130,246,0.06)] transition-all duration-300">
+        {/* Header */}
+        <div className="px-5 pt-5 pb-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-1.5">
+              <Brain className="w-4 h-4 text-indigo-500 dark:text-indigo-400 animate-pulse" />
+              <span className="text-[11px] font-bold text-foreground tracking-[0.08em]">
+                Analisis & Prediksi AI
+              </span>
+            </div>
+
+            {/* ML badge */}
+            {isMLAvailable && mlStatus && mlStatusConfig ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span
+                    className={cn(
+                      "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold shrink-0 border transition-all duration-500 cursor-help",
+                      mlStatusConfig.styles,
+                    )}
+                  >
+                    {selectedModel === "decision_tree" ? "DT" : "RF"}: {mlStatusConfig.label}
+                    <HelpCircle className="w-3 h-3 ml-0.5 opacity-70" />
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="max-w-xs text-xs">
+                  Status filter yang diprediksi oleh kecerdasan buatan (Machine Learning) menggunakan algoritma {selectedModel === "decision_tree" ? "Decision Tree (Pohon Keputusan)" : "Random Forest (Hutan Acak)"}.
+                </TooltipContent>
+              </Tooltip>
+            ) : !isMLAvailable ? (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-muted border border-border/40 text-muted-foreground shrink-0 shadow-sm">
+                <WifiOff className="w-3.5 h-3.5 animate-pulse" />
+                ML Offline
+              </span>
+            ) : null}
+          </div>
+        </div>
+
+        {/* Content body */}
+        <div className="px-5 pb-5 pt-2 space-y-4">
+          {onModelChange && (
+            <div className="flex justify-between items-center gap-2 bg-muted/30 dark:bg-slate-900/40 p-2 rounded-xl border border-border/80 dark:border-white/5">
+              <span className="text-xs font-semibold text-muted-foreground">Model AI</span>
+              <div className="flex bg-muted/60 dark:bg-slate-950 p-0.5 rounded-lg border border-border/40 dark:border-white/5 relative">
+                <button
+                  type="button"
+                  onClick={() => onModelChange("decision_tree")}
+                  className={cn(
+                    "px-2.5 py-1 text-[10px] font-bold rounded-md transition-all duration-200 cursor-pointer",
+                    selectedModel === "decision_tree"
+                      ? "bg-background text-foreground shadow-sm shadow-black/10 dark:bg-slate-800"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  Decision Tree
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onModelChange("random_forest")}
+                  className={cn(
+                    "px-2.5 py-1 text-[10px] font-bold rounded-md transition-all duration-200 cursor-pointer",
+                    selectedModel === "random_forest"
+                      ? "bg-background text-foreground shadow-sm shadow-black/10 dark:bg-slate-800"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  Random Forest
+                </button>
+              </div>
+            </div>
+          )}
+
+          {isMLAvailable && confidence !== null && (
+            <div className="flex justify-between items-center text-[11px] text-muted-foreground bg-muted/20 dark:bg-slate-900/30 p-2.5 rounded-xl border border-border/50 dark:border-white/5">
+              <div className="flex items-center gap-1.5">
+                <ShieldCheck className="w-3.5 h-3.5 text-indigo-500" />
+                <span>Keyakinan AI (Akurasi)</span>
+              </div>
+              <span className="font-bold text-foreground text-xs tabular-nums">
+                {(confidence * 100).toFixed(0)}%
+              </span>
+            </div>
+          )}
+
+          {/* Error notification */}
+          {error && (
+            <div className="flex items-start gap-2.5 p-3.5 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive animate-in fade-in slide-in-from-top-1 duration-200">
+              <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+              <div className="space-y-1">
+                <p className="text-xs font-bold leading-none">
+                  Peringatan Sistem
+                </p>
+                <p className="text-[10px] opacity-90 leading-normal font-medium">
+                  {error}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* ML offline info */}
+          {!isMLAvailable && (
+            <div className="flex items-center gap-2.5 p-3.5 rounded-xl bg-muted/40 dark:bg-slate-950/40 border border-border/60 dark:border-white/5 shadow-inner">
+              <WifiOff className="w-4 h-4 text-muted-foreground shrink-0 animate-pulse" />
+              <div>
+                <p className="text-xs font-bold text-foreground">
+                  Sistem AI Offline
+                </p>
+                <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight font-medium">
+                  Menggunakan aturan cadangan sistem
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Loading skeleton */}
+          {isMLAvailable && isPredicting && (
+            <div className="space-y-3.5 animate-pulse">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="space-y-1.5 p-2 border border-transparent">
+                  <div className="flex justify-between">
+                    <div className="h-3 bg-muted rounded w-20" />
+                    <div className="h-3 bg-muted rounded w-10" />
+                  </div>
+                  <div className="h-1.5 bg-muted rounded-full w-full" />
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Probability bars */}
+          {isMLAvailable && !isPredicting && probabilityBars && (
+            <div className="space-y-2">
+              {probabilityBars.map((bar) => {
+                const isDominant = dominantLabel === bar.label && bar.value > 0;
+                return (
+                  <div
+                    key={bar.label}
+                    className={cn(
+                      "p-2.5 rounded-xl transition-all duration-300 border border-transparent space-y-1.5",
+                      isDominant && bar.activeBg
+                    )}
+                  >
+                    <div className="flex justify-between items-center">
+                      <div className="flex items-center gap-1.5">
+                        {bar.icon}
+                        <span className={cn("text-xs font-bold", bar.text)}>
+                          {bar.label}
+                        </span>
+                        {isDominant && (
+                          <span className="text-[9px] uppercase font-extrabold bg-foreground/10 text-foreground dark:bg-white/10 px-1.5 py-0.5 rounded tracking-wide">
+                            Aktif
+                          </span>
+                        )}
+                      </div>
+                      <span
+                        className={cn("text-xs font-extrabold tabular-nums", bar.text)}
+                      >
+                        {(bar.value * 100).toFixed(0)}%
+                      </span>
+                    </div>
+                    <div className="h-1.5 w-full bg-slate-200 dark:bg-slate-800/80 rounded-full overflow-hidden">
+                      <div
+                        className={cn(
+                          "h-full rounded-full transition-all duration-1000 ease-out",
+                          bar.bar
+                        )}
+                        style={{ width: `${(bar.value * 100).toFixed(0)}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Recommendation insights box */}
+          {isMLAvailable && !isPredicting && recommendation && (
+            <div className="flex flex-col gap-1.5 p-3.5 rounded-xl bg-gradient-to-br from-indigo-500/5 via-purple-500/5 to-transparent border border-indigo-500/10 dark:border-indigo-500/20 border-l-4 border-l-indigo-500 shadow-sm relative overflow-hidden">
+              <div className="flex items-center gap-1.5 text-indigo-600 dark:text-indigo-400 font-bold text-[10px] uppercase tracking-widest">
+                <Sparkles className="w-3.5 h-3.5 animate-pulse" />
+                <span>Rekomendasi AI</span>
+              </div>
+              <p className="text-[11px] text-muted-foreground dark:text-slate-300 leading-relaxed font-medium">
+                {recommendation}
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* ── ML Regression Stats ── */}
+        {isMLAvailable && !isPredicting && predictedRulHours !== null && filterIntegrityPercent !== null && (
+          <>
+            <div className="h-px bg-border/60 dark:bg-white/5 mx-5" />
+            <div className="px-5 py-4 grid grid-cols-2 gap-3">
+              {/* RUL Card */}
+              <div className="flex items-center gap-2.5 p-3 rounded-xl bg-gradient-to-br from-blue-500/5 to-transparent border border-blue-500/15 hover:border-blue-500/30 hover:-translate-y-0.5 transition-all duration-300 shadow-sm min-w-0">
+                <div className="p-1.5 rounded-lg bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-500/15 shrink-0">
+                  <Clock className="w-3.5 h-3.5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-[11px] font-bold text-muted-foreground tracking-[0.08em] truncate">
+                      Umur Filter Tersisa
+                    </p>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button type="button" className="text-muted-foreground hover:text-foreground cursor-help focus:outline-hidden shrink-0">
+                          <HelpCircle className="w-3 h-3" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="max-w-xs text-xs">
+                        Remaining Useful Life (RUL): Perkiraan sisa waktu pemakaian filter dalam satuan jam sebelum perlu diganti.
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
+                  <p className="text-[13px] font-extrabold text-foreground mt-0.5 tabular-nums leading-tight truncate">
+                    {predictedRulHours.toLocaleString("id-ID")} jam
+                  </p>
+                </div>
+              </div>
+
+              {/* Integrity Card */}
+              <div className="flex items-center gap-2.5 p-3 rounded-xl bg-gradient-to-br from-teal-500/5 to-transparent border border-teal-500/15 hover:border-teal-500/30 hover:-translate-y-0.5 transition-all duration-300 shadow-sm min-w-0">
+                <div className="p-1.5 rounded-lg bg-teal-50 dark:bg-teal-950/30 text-teal-600 dark:text-teal-400 border border-teal-100 dark:border-teal-500/15 shrink-0">
+                  <Activity className="w-3.5 h-3.5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-[11px] font-bold text-muted-foreground tracking-[0.08em] truncate">
+                      Akurasi Prediksi
+                    </p>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button type="button" className="text-muted-foreground hover:text-foreground cursor-help focus:outline-hidden shrink-0">
+                          <HelpCircle className="w-3 h-3" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="max-w-xs text-xs">
+                        Persentase kebersihan dan efisiensi penyaringan filter saat ini berdasarkan prediksi model kecerdasan buatan.
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
+                  <p className="text-[13px] font-extrabold text-foreground mt-0.5 tabular-nums leading-tight truncate">
+                    {filterIntegrityPercent.toFixed(1)}%
+                  </p>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+      </Card>
+    </div>
   );
 }
