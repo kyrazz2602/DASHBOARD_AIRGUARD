@@ -206,34 +206,32 @@ export function MaintenanceWidget({
   return (
     <div className="space-y-6">
       {/* ── Card 1: Kesehatan & Status Filter ── */}
-      <Card className="overflow-hidden border border-white/5 dark:border-white/10 shadow-2xl bg-gradient-to-b from-card/85 via-card/90 to-card/95 backdrop-blur-md relative hover:shadow-[0_0_30px_rgba(59,130,246,0.06)] transition-all duration-300">
+      <Card className="overflow-hidden border border-white/5 dark:border-white/10 shadow-2xl bg-gradient-to-b from-card/85 via-card/90 to-card/95 backdrop-blur-md relative hover:shadow-[0_0_30px_rgba(59,130,246,0.06)] transition-all duration-300 p-5 sm:p-6 gap-5">
         {/* Top dynamic accent bar */}
         <div className={cn("h-1 w-full absolute top-0 left-0 transition-all duration-500", filterStatus.styles.accentBar)} />
 
         {/* Header */}
-        <div className="px-5 pt-6 pb-4">
-          <div className="flex items-center gap-3">
-            <div className={cn("p-2 rounded-xl transition-all duration-500", filterStatus.styles.icon)}>
-              {filterStatus.icon}
-            </div>
-            <div>
-              <p
-                className={cn(
-                  "text-sm font-bold leading-tight transition-colors duration-500",
-                  filterStatus.styles.text,
-                )}
-              >
-                {filterStatus.label}
-              </p>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                {filterStatus.sublabel}
-              </p>
-            </div>
+        <div className="flex items-center gap-3">
+          <div className={cn("p-2 rounded-xl transition-all duration-500", filterStatus.styles.icon)}>
+            {filterStatus.icon}
+          </div>
+          <div>
+            <p
+              className={cn(
+                "text-sm font-bold leading-tight transition-colors duration-500",
+                filterStatus.styles.text,
+              )}
+            >
+              {filterStatus.label}
+            </p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {filterStatus.sublabel}
+            </p>
           </div>
         </div>
 
         {/* Filter Integrity / Kesehatan */}
-        <div className="px-5 pb-5 space-y-2.5">
+        <div className="space-y-2.5">
           <div className="flex justify-between items-center">
             <span className="text-xs font-semibold text-muted-foreground">
               Kesehatan & Integritas Filter
@@ -283,10 +281,10 @@ export function MaintenanceWidget({
           </div>
         </div>
 
-        <div className="h-px bg-border/60 dark:bg-white/5 mx-5" />
+        <div className="h-px bg-border/60 dark:bg-white/5 -mx-5 sm:-mx-6" />
 
         {/* Stats */}
-        <div className="px-5 py-4 grid grid-cols-2 gap-3">
+        <div className="flex flex-col sm:grid sm:grid-cols-2 gap-3">
           {/* Temperature Card */}
           <div className="flex items-center gap-3 p-3 rounded-xl bg-muted/30 dark:bg-slate-900/40 border border-border/80 dark:border-white/5 hover:scale-[1.02] hover:shadow-md transition-all duration-300">
             <div className="p-1.5 rounded-lg bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-500/15 shrink-0 animate-pulse">
@@ -341,46 +339,44 @@ export function MaintenanceWidget({
       </Card>
 
       {/* ── Card 2: Analisis & Prediksi AI/ML ── */}
-      <Card className="overflow-hidden border border-white/5 dark:border-white/10 shadow-2xl bg-gradient-to-b from-card/85 via-card/90 to-card/95 backdrop-blur-md relative hover:shadow-[0_0_30px_rgba(59,130,246,0.06)] transition-all duration-300">
+      <Card className="overflow-hidden border border-white/5 dark:border-white/10 shadow-2xl bg-gradient-to-b from-card/85 via-card/90 to-card/95 backdrop-blur-md relative hover:shadow-[0_0_30px_rgba(59,130,246,0.06)] transition-all duration-300 p-5 sm:p-6 gap-5">
         {/* Header */}
-        <div className="px-5 pt-5 pb-3">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-1.5">
-              <Brain className="w-4 h-4 text-indigo-500 dark:text-indigo-400 animate-pulse" />
-              <span className="text-[11px] font-bold text-foreground tracking-[0.08em]">
-                Analisis & Prediksi AI
-              </span>
-            </div>
-
-            {/* ML badge */}
-            {isMLAvailable && mlStatus && mlStatusConfig ? (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span
-                    className={cn(
-                      "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold shrink-0 border transition-all duration-500 cursor-help",
-                      mlStatusConfig.styles,
-                    )}
-                  >
-                    {selectedModel === "decision_tree" ? "DT" : "RF"}: {mlStatusConfig.label}
-                    <HelpCircle className="w-3 h-3 ml-0.5 opacity-70" />
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent side="top" className="max-w-xs text-xs">
-                  Status filter yang diprediksi oleh kecerdasan buatan (Machine Learning) menggunakan algoritma {selectedModel === "decision_tree" ? "Decision Tree (Pohon Keputusan)" : "Random Forest (Hutan Acak)"}.
-                </TooltipContent>
-              </Tooltip>
-            ) : !isMLAvailable ? (
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-muted border border-border/40 text-muted-foreground shrink-0 shadow-sm">
-                <WifiOff className="w-3.5 h-3.5 animate-pulse" />
-                ML Offline
-              </span>
-            ) : null}
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-1.5">
+            <Brain className="w-4 h-4 text-indigo-500 dark:text-indigo-400 animate-pulse" />
+            <span className="text-[11px] font-bold text-foreground tracking-[0.08em]">
+              Analisis & Prediksi AI
+            </span>
           </div>
+
+          {/* ML badge */}
+          {isMLAvailable && mlStatus && mlStatusConfig ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span
+                  className={cn(
+                    "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold shrink-0 border transition-all duration-500 cursor-help",
+                    mlStatusConfig.styles,
+                  )}
+                >
+                  {selectedModel === "decision_tree" ? "DT" : "RF"}: {mlStatusConfig.label}
+                  <HelpCircle className="w-3 h-3 ml-0.5 opacity-70" />
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="top" className="max-w-xs text-xs">
+                Status filter yang diprediksi oleh kecerdasan buatan (Machine Learning) menggunakan algoritma {selectedModel === "decision_tree" ? "Decision Tree (Pohon Keputusan)" : "Random Forest (Hutan Acak)"}.
+              </TooltipContent>
+            </Tooltip>
+          ) : !isMLAvailable ? (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-muted border border-border/40 text-muted-foreground shrink-0 shadow-sm">
+              <WifiOff className="w-3.5 h-3.5 animate-pulse" />
+              ML Offline
+            </span>
+          ) : null}
         </div>
 
         {/* Content body */}
-        <div className="px-5 pb-5 pt-2 space-y-4">
+        <div className="space-y-4">
           {onModelChange && (
             <div className="flex justify-between items-center gap-2 bg-muted/30 dark:bg-slate-900/40 p-2 rounded-xl border border-border/80 dark:border-white/5">
               <span className="text-xs font-semibold text-muted-foreground">Model AI</span>
@@ -533,8 +529,8 @@ export function MaintenanceWidget({
         {/* ── ML Regression Stats ── */}
         {isMLAvailable && !isPredicting && predictedRulHours !== null && filterIntegrityPercent !== null && (
           <>
-            <div className="h-px bg-border/60 dark:bg-white/5 mx-5" />
-            <div className="px-5 py-4 grid grid-cols-2 gap-3">
+            <div className="h-px bg-border/60 dark:bg-white/5 -mx-5 sm:-mx-6" />
+            <div className="flex flex-col sm:grid sm:grid-cols-2 gap-3">
               {/* RUL Card */}
               <div className="flex items-center gap-2.5 p-3 rounded-xl bg-gradient-to-br from-blue-500/5 to-transparent border border-blue-500/15 hover:border-blue-500/30 hover:-translate-y-0.5 transition-all duration-300 shadow-sm min-w-0">
                 <div className="p-1.5 rounded-lg bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-500/15 shrink-0">
@@ -552,12 +548,12 @@ export function MaintenanceWidget({
                         </button>
                       </TooltipTrigger>
                       <TooltipContent side="top" className="max-w-xs text-xs">
-                        Remaining Useful Life (RUL): Perkiraan sisa waktu pemakaian filter dalam satuan jam sebelum perlu diganti.
+                        Remaining Useful Life (RUL): Perkiraan sisa waktu pemakaian filter dalam satuan hari sebelum perlu diganti.
                       </TooltipContent>
                     </Tooltip>
                   </div>
                   <p className="text-[13px] font-extrabold text-foreground mt-0.5 tabular-nums leading-tight truncate">
-                    {predictedRulHours.toLocaleString("id-ID")} jam
+                    {Math.round(predictedRulHours / 24)} hari
                   </p>
                 </div>
               </div>
@@ -570,7 +566,7 @@ export function MaintenanceWidget({
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5">
                     <p className="text-[11px] font-bold text-muted-foreground tracking-[0.08em] truncate">
-                      Akurasi Prediksi
+                      Integritas Filter
                     </p>
                     <Tooltip>
                       <TooltipTrigger asChild>

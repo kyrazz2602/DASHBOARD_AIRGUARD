@@ -15,10 +15,16 @@ export function useFilterEstimation() {
 
   // 1. Listen to filter start date from Firebase
   useEffect(() => {
-    const unsub = listenToFilterStartDate((timestamp) => {
-      setFilterStartDate(timestamp);
-      setIsLoading(false);
-    });
+    const unsub = listenToFilterStartDate(
+      (timestamp) => {
+        setFilterStartDate(timestamp);
+        setIsLoading(false);
+      },
+      (error) => {
+        console.error("Failed to listen to filter start date:", error);
+        setIsLoading(false); // Stop loading to make sure the reset button is enabled
+      }
+    );
     return unsub;
   }, []);
 
@@ -101,7 +107,7 @@ export function useFilterEstimation() {
     setIsLoading(true);
     try {
       await firebaseResetFilter();
-      // Optimistic update will be handled by the onValue listener
+      setIsLoading(false);
     } catch (err) {
       console.error("Failed to reset filter:", err);
       setIsLoading(false);

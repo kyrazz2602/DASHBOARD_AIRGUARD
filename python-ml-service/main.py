@@ -376,6 +376,11 @@ async def predict(request: PredictRequest) -> Any:
     # Scaler is NOT needed for tree models (DT / RF). We do direct prediction.
     predicted_rul = float(model.predict(current_features.values)[0])
 
+    # Rule-Based New Filter Override (Approach 2)
+    # If the filter was recently reset (operating hours < 1 hour), force predicted RUL to maximum 4320.0 hours
+    if request.operating_hours < 1.0:
+        predicted_rul = 4320.0
+
     # Clamp RUL to physical limits
     predicted_rul = max(0.0, min(predicted_rul, 4320.0))
     integrity = (predicted_rul / 4320.0) * 100.0

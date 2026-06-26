@@ -637,7 +637,7 @@ export function ChartSection() {
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <Card className="p-5 md:p-6 bg-card border border-border/60 shadow-sm">
+    <Card className="p-5 sm:p-6 bg-card border border-border/60 shadow-sm">
       {/* ── Header ── */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-5 gap-3">
         <div className="flex items-center gap-3">
@@ -753,13 +753,13 @@ export function ChartSection() {
           <p className="text-[10px] font-bold text-muted-foreground mb-2 uppercase tracking-wider">
             Parameter Sensor
           </p>
-          <div className="flex gap-1.5 flex-wrap">
+          <div className="flex gap-3 sm:gap-1.5 flex-wrap">
             {(Object.keys(SENSOR_CONFIG) as SensorType[]).map((s) => (
               <button
                 key={s}
                 onClick={() => setSelectedSensor(s)}
                 className={cn(
-                  "px-3 py-2.5 sm:py-1.5 rounded-lg text-xs font-semibold border transition-all duration-200 min-h-[44px] sm:min-h-0 flex items-center justify-center",
+                  "px-4 py-2.5 rounded-lg text-xs font-semibold border transition-all duration-200 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 sm:px-3 sm:py-1.5 flex items-center justify-center",
                   selectedSensor === s
                     ? "text-white border-transparent shadow-sm scale-105"
                     : "bg-muted/50 border-border text-muted-foreground hover:text-foreground hover:bg-muted",
@@ -780,7 +780,7 @@ export function ChartSection() {
 
           {/* Line Toggles for Combined Chart */}
           {selectedSensor === "all" && (
-            <div className="flex gap-2 flex-wrap items-center mt-3 p-1.5 bg-muted/30 border border-border/40 rounded-xl max-w-fit animate-in fade-in slide-in-from-top-1 duration-200">
+            <div className="flex gap-3 sm:gap-2 flex-wrap items-center mt-3 p-1.5 bg-muted/30 border border-border/40 rounded-xl max-w-fit animate-in fade-in slide-in-from-top-1 duration-200">
               <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest px-2">
                 Filter:
               </span>
@@ -808,7 +808,7 @@ export function ChartSection() {
                       }))
                     }
                     className={cn(
-                      "px-3 py-2 sm:py-1 rounded-lg text-xs sm:text-[10px] font-bold flex items-center gap-1.5 border transition-all duration-150 min-h-[44px] sm:min-h-0",
+                      "px-4 py-2.5 rounded-lg text-xs sm:text-[10px] font-bold flex items-center gap-1.5 border transition-all duration-150 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 sm:px-3 sm:py-1",
                       active
                         ? "bg-card text-foreground shadow-xs"
                         : "bg-muted/10 border-dashed border-border/60 text-muted-foreground/50 hover:text-muted-foreground",
@@ -834,13 +834,13 @@ export function ChartSection() {
           <p className="text-[10px] font-bold text-muted-foreground mb-2 uppercase tracking-wider flex items-center gap-1 sm:justify-end">
             <Calendar className="w-3 h-3" /> Rentang Waktu
           </p>
-          <div className="flex gap-1.5 flex-wrap sm:justify-end">
+          <div className="flex gap-3 sm:gap-1.5 flex-wrap sm:justify-end">
             {(["1h", "3d", "7d"] as const).map((r) => (
               <button
                 key={r}
                 onClick={() => setTimeRange(r)}
                 className={cn(
-                  "px-3 py-2.5 sm:py-1.5 rounded-lg text-xs font-semibold border transition-all duration-200 min-h-[44px] sm:min-h-0 flex items-center justify-center",
+                  "px-4 py-2.5 rounded-lg text-xs font-semibold border transition-all duration-200 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 sm:px-3 sm:py-1.5 flex items-center justify-center",
                   timeRange === r
                     ? "border-primary/50 bg-primary/10 text-primary dark:text-primary"
                     : "bg-muted/50 border-border text-muted-foreground hover:text-foreground hover:bg-muted",

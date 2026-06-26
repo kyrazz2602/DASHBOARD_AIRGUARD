@@ -84,7 +84,7 @@ export function SensorCard({
 
   if (isLoading) {
     return (
-      <Card className={cn("p-4 sm:p-5 bg-card border border-border/60 space-y-3", className)}>
+      <Card className={cn("p-5 sm:p-6 bg-card border border-border/60 space-y-3", className)}>
         <div className="flex items-center justify-between">
           <Skeleton className="h-3.5 w-12" />
           <Skeleton className="h-7 w-7 rounded-lg" />
@@ -104,7 +104,7 @@ export function SensorCard({
   return (
     <Card
       className={cn(
-        "group relative overflow-hidden p-4 sm:p-5 bg-card border border-border cursor-default select-none",
+        "group relative overflow-hidden p-5 sm:p-6 bg-card border border-border cursor-default select-none",
         "transition-all duration-300 ease-out",
         "hover:-translate-y-1 hover:shadow-lg",
         styles.glow,

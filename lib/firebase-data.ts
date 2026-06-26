@@ -40,7 +40,7 @@ export interface LidarData {
 }
 
 // ============================================================================
-// 2. DATABASE PATHS
+// 2. DATABASE PATHS & HELPER
 // ============================================================================
 
 const UDARA_PATH = "Udara";
@@ -48,6 +48,13 @@ const STATUS_PATH = "Status";
 const COMMAND_PATH = "Command";
 const LIDAR_PATH = "LiDAR/latest";
 const HISTORY_PATH = "history";
+
+/**
+ * Memastikan Firebase database terinisialisasi sebelum melakukan operasi
+ */
+const isDbReady = (): boolean => {
+  return database && typeof database.app !== "undefined";
+};
 
 // ============================================================================
 // 3. REAL-TIME DATA SUBSCRIBERS (LISTENERS)
@@ -64,6 +71,10 @@ export function listenToSensorData(
   callback: (data: SensorReading) => void,
   onError?: (error: Error) => void,
 ): () => void {
+  if (!isDbReady()) {
+    console.warn("[listenToSensorData] Firebase Database not initialized.");
+    return () => {};
+  }
   const sensorsRef = ref(database, UDARA_PATH);
 
   const listener = onValue(
@@ -72,13 +83,13 @@ export function listenToSensorData(
       const data = snapshot.val();
       if (data) {
         const sensorReading: SensorReading = {
-          pm25: Number(data.PM25) || 0,
-          pm10: Number(data.PM10) || 0,
-          co: Number(data.CO) || 0,
-          voc: Number(data.VOC) || 0,
-          suhu: Number(data.Suhu) || 25,
-          tegangan: Number(data.Tegangan) || 0,
-          battery: Number(data.Persentase) || 0,
+          pm25: Number(data.PM25 !== undefined ? data.PM25 : data.pm25) || 0,
+          pm10: Number(data.PM10 !== undefined ? data.PM10 : data.pm10) || 0,
+          co: Number(data.CO !== undefined ? data.CO : data.co) || 0,
+          voc: Number(data.VOC !== undefined ? data.VOC : data.voc) || 0,
+          suhu: Number(data.Suhu !== undefined ? data.Suhu : data.suhu) || 25,
+          tegangan: Number(data.Tegangan !== undefined ? data.Tegangan : data.tegangan) || 0,
+          battery: Number(data.Persentase !== undefined ? data.Persentase : (data.battery !== undefined ? data.battery : data.Battery)) || 0,
           timestamp: new Date(),
         };
         callback(sensorReading);
@@ -104,6 +115,10 @@ export function listenToDeviceStatus(
   callback: (status: DeviceStatus) => void,
   onError?: (error: Error) => void,
 ): () => void {
+  if (!isDbReady()) {
+    console.warn("[listenToDeviceStatus] Firebase Database not initialized.");
+    return () => {};
+  }
   const statusRef = ref(database, STATUS_PATH);
 
   const listener = onValue(
@@ -112,10 +127,10 @@ export function listenToDeviceStatus(
       const data = snapshot.val();
       if (data) {
         callback({
-          kipas: (data.kipas as FanSpeed) || "off",
+          kipas: (((data.kipas !== undefined ? data.kipas : data.speed) as string)?.toLowerCase() as FanSpeed) || "off",
           gerak: String(data.gerak || "DIAM"),
-          rpmKanan: Number(data.rpmKanan || 0),
-          rpmKiri: Number(data.rpmKiri || 0),
+          rpmKanan: Number(data.rpmKanan !== undefined ? data.rpmKanan : (data.rpm_right !== undefined ? data.rpm_right : 0)),
+          rpmKiri: Number(data.rpmKiri !== undefined ? data.rpmKiri : (data.rpm_left !== undefined ? data.rpm_left : 0)),
           x: data.x !== undefined ? Number(data.x) : undefined,
           y: data.y !== undefined ? Number(data.y) : undefined,
           yaw: data.yaw !== undefined ? Number(data.yaw) : undefined,
@@ -145,6 +160,10 @@ export function listenToFanControl(
   callback: (state: FanControlState) => void,
   onError?: (error: Error) => void,
 ): () => void {
+  if (!isDbReady()) {
+    console.warn("[listenToFanControl] Firebase Database not initialized.");
+    return () => {};
+  }
   const fanRef = ref(database, COMMAND_PATH);
 
   const listener = onValue(
@@ -153,7 +172,7 @@ export function listenToFanControl(
       const data = snapshot.val();
       if (data) {
         callback({
-          speed: ((data.speed as string)?.toLowerCase() as FanSpeed) || "off",
+          speed: (((data.speed !== undefined ? data.speed : data.kipas) as string)?.toLowerCase() as FanSpeed) || "off",
           isAutoMode: data.isAutoMode !== undefined ? Boolean(data.isAutoMode) : true,
           updatedAt: data.updatedAt,
         });
@@ -178,7 +197,12 @@ export function listenToFanControl(
  */
 export function listenToFilterStartDate(
   callback: (timestamp: number | null) => void,
+  onError?: (error: Error) => void,
 ): () => void {
+  if (!isDbReady()) {
+    console.warn("[listenToFilterStartDate] Firebase Database not initialized.");
+    return () => {};
+  }
   const filterRef = ref(database, `${COMMAND_PATH}/filterStartDate`);
 
   const listener = onValue(
@@ -188,6 +212,7 @@ export function listenToFilterStartDate(
     },
     (error: Error) => {
       console.error("[listenToFilterStartDate] Firebase error:", error);
+      if (onError) onError(error);
     },
   );
 
@@ -205,6 +230,10 @@ export function listenToLidarData(
   callback: (data: LidarData) => void,
   onError?: (error: Error) => void,
 ): () => void {
+  if (!isDbReady()) {
+    console.warn("[listenToLidarData] Firebase Database not initialized.");
+    return () => {};
+  }
   const lidarRef = ref(database, LIDAR_PATH);
 
   const listener = onValue(
@@ -239,6 +268,10 @@ export function listenToLidarData(
  * @param state Konfigurasi kontrol kipas yang baru
  */
 export async function setFanControl(state: FanControlState): Promise<void> {
+  if (!isDbReady()) {
+    console.warn("[setFanControl] Firebase Database not initialized.");
+    return;
+  }
   const fanRef = ref(database, COMMAND_PATH);
   await update(fanRef, {
     speed: state.speed.toUpperCase(),
@@ -253,6 +286,10 @@ export async function setFanControl(state: FanControlState): Promise<void> {
  * @param isAuto true untuk otonom (autonomous), false untuk manual
  */
 export async function setNavigationMode(isAuto: boolean): Promise<void> {
+  if (!isDbReady()) {
+    console.warn("[setNavigationMode] Firebase Database not initialized.");
+    return;
+  }
   const fanRef = ref(database, COMMAND_PATH);
   await update(fanRef, {
     isAutoMode: isAuto,
@@ -276,6 +313,10 @@ export async function setNavigationMode(isAuto: boolean): Promise<void> {
  * @param gerak Arah gerak ("MAJU", "MUNDUR", "KIRI", "KANAN", "DIAM")
  */
 export async function setGerakCommand(gerak: string): Promise<void> {
+  if (!isDbReady()) {
+    console.warn("[setGerakCommand] Firebase Database not initialized.");
+    return;
+  }
   const gerakRef = ref(database, `${COMMAND_PATH}/gerak`);
   await set(gerakRef, gerak.toUpperCase());
 }
@@ -287,6 +328,10 @@ export async function setGerakCommand(gerak: string): Promise<void> {
  * @param y Posisi target sumbu Y (meter)
  */
 export async function sendNavGoal(x: number, y: number): Promise<void> {
+  if (!isDbReady()) {
+    console.warn("[sendNavGoal] Firebase Database not initialized.");
+    return;
+  }
   const commandRef = ref(database, COMMAND_PATH);
   await update(commandRef, {
     goal_x: x,
@@ -300,13 +345,17 @@ export async function sendNavGoal(x: number, y: number): Promise<void> {
  * @returns Konfigurasi kipas saat ini atau null jika data tidak ditemukan
  */
 export async function getFanControl(): Promise<FanControlState | null> {
+  if (!isDbReady()) {
+    console.warn("[getFanControl] Firebase Database not initialized.");
+    return null;
+  }
   const fanRef = ref(database, COMMAND_PATH);
   const snapshot = await get(fanRef);
   
   if (snapshot.exists()) {
     const data = snapshot.val();
     return {
-      speed: ((data.speed as string)?.toLowerCase() as FanSpeed) || "off",
+      speed: (((data.speed !== undefined ? data.speed : data.kipas) as string)?.toLowerCase() as FanSpeed) || "off",
       isAutoMode: data.isAutoMode !== undefined ? Boolean(data.isAutoMode) : true,
       updatedAt: data.updatedAt,
     };
@@ -318,6 +367,10 @@ export async function getFanControl(): Promise<FanControlState | null> {
  * Mereset tanggal mulai penggunaan filter udara baru di /Command/filterStartDate
  */
 export async function resetFilterStartDate(): Promise<void> {
+  if (!isDbReady()) {
+    console.warn("[resetFilterStartDate] Firebase Database not initialized.");
+    return;
+  }
   const filterRef = ref(database, `${COMMAND_PATH}/filterStartDate`);
   await set(filterRef, Date.now());
 }
@@ -335,6 +388,10 @@ export async function resetFilterStartDate(): Promise<void> {
 export async function getHistoricalData(
   days: number,
 ): Promise<HistoricalData[]> {
+  if (!isDbReady()) {
+    console.warn("[getHistoricalData] Firebase Database not initialized.");
+    return [];
+  }
   return new Promise((resolve) => {
     const historyRef = ref(database, HISTORY_PATH);
 
@@ -352,16 +409,16 @@ export async function getHistoricalData(
 
         Object.entries(data).forEach(([timestamp, values]: [string, any]) => {
           const ts = Number(timestamp);
-          if (ts >= cutoffTime) {
+          if (!isNaN(ts) && ts >= cutoffTime && values) {
             historicalData.push({
               timestamp: new Date(ts),
-              pm25: Number(values.pm25) || 0,
-              pm10: Number(values.pm10) || 0,
-              co: Number(values.co) || 0,
-              voc: Number(values.voc) || 0,
-              suhu: Number(values.suhu) || 0,
-              tegangan: Number(values.tegangan) || 0,
-              battery: Number(values.battery) || 0,
+              pm25: Number(values.pm25 !== undefined ? values.pm25 : values.PM25) || 0,
+              pm10: Number(values.pm10 !== undefined ? values.pm10 : values.PM10) || 0,
+              co: Number(values.co !== undefined ? values.co : values.CO) || 0,
+              voc: Number(values.voc !== undefined ? values.voc : values.VOC) || 0,
+              suhu: Number(values.suhu !== undefined ? values.suhu : values.Suhu) || 0,
+              tegangan: Number(values.tegangan !== undefined ? values.tegangan : values.Tegangan) || 0,
+              battery: Number(values.battery !== undefined ? values.battery : (values.Persentase !== undefined ? values.Persentase : values.Battery)) || 0,
             });
           }
         });
