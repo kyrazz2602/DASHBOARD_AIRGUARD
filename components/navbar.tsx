@@ -6,6 +6,8 @@ import { usePathname } from "next/navigation";
 import { useAuth } from "@/context/auth-context";
 import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
+import { useSensorData } from "@/hooks/use-sensor-data";
+import { getStatusLabel } from "@/lib/sensor-data";
 import {
   LogOut,
   Menu,
@@ -37,6 +39,28 @@ interface NavbarProps {
 export function Navbar({ alerts }: NavbarProps = {}) {
   const { user, logout } = useAuth();
   const pathname = usePathname();
+
+  // Ambil data sensor secara internal jika tidak dilewatkan lewat prop alerts dan user login
+  const { data: sensorData } = useSensorData(3000);
+
+  const activeAlerts = useMemo(() => {
+    if (alerts) return alerts;
+    if (!user) return [];
+
+    return [
+      { name: "PM2.5", value: sensorData.pm25, type: "PM2_5" as const, unit: "μg/m³" },
+      { name: "PM10", value: sensorData.pm10, type: "PM10" as const, unit: "μg/m³" },
+      { name: "CO", value: sensorData.co, type: "CO" as const, unit: "ppm" },
+      { name: "VOC", value: sensorData.voc, type: "VOC" as const, unit: "ppm" },
+    ].map((param) => {
+      const status = getStatusLabel(param.value, param.type);
+      return {
+        ...param,
+        status,
+        isAlert: status !== "Safe",
+      };
+    }).filter((c) => c.isAlert);
+  }, [alerts, user, sensorData]);
   const [isScrolled, setIsScrolled] = useState(false);
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
@@ -78,9 +102,9 @@ export function Navbar({ alerts }: NavbarProps = {}) {
         <h4 className="font-extrabold text-[11px] text-foreground uppercase tracking-wider">
           Notifikasi Parameter
         </h4>
-        {alerts && alerts.length > 0 ? (
+        {activeAlerts && activeAlerts.length > 0 ? (
           <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
-            {alerts.length} Parameter Tinggi
+            {activeAlerts.length} Parameter Tinggi
           </span>
         ) : (
           <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
@@ -90,8 +114,8 @@ export function Navbar({ alerts }: NavbarProps = {}) {
       </div>
 
       <div className="p-2.5 max-h-72 overflow-y-auto space-y-1.5">
-        {alerts && alerts.length > 0 ? (
-          alerts.map((alert) => (
+        {activeAlerts && activeAlerts.length > 0 ? (
+          activeAlerts.map((alert) => (
             <div
               key={alert.name}
               className={cn(
@@ -204,23 +228,23 @@ export function Navbar({ alerts }: NavbarProps = {}) {
               </button>
 
               {/* Notification Bell (Desktop) */}
-              {alerts && (
+              {user && (
                 <div ref={notifRef} className="relative z-50 shrink-0">
                   <button
                     type="button"
                     onClick={() => setIsNotifDropdownOpen(!isNotifDropdownOpen)}
                     className={cn(
                       "relative p-2 rounded-lg transition-colors focus:outline-none active:scale-95",
-                      alerts.length > 0
+                      activeAlerts.length > 0
                         ? "bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 dark:text-amber-400 animate-[pulse_2.2s_infinite]"
                         : "hover:bg-muted text-muted-foreground hover:text-foreground"
                     )}
                     title="Notifikasi"
                   >
-                    <Bell className={cn("w-5 h-5", alerts.length > 0 && "animate-[bounce_2s_infinite]")} />
-                    {alerts.length > 0 && (
+                    <Bell className={cn("w-5 h-5", activeAlerts.length > 0 && "animate-[bounce_2s_infinite]")} />
+                    {activeAlerts.length > 0 && (
                       <span className="absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white shadow-sm shadow-red-500/30">
-                        {alerts.length}
+                        {activeAlerts.length}
                       </span>
                     )}
                   </button>
@@ -280,23 +304,23 @@ export function Navbar({ alerts }: NavbarProps = {}) {
               </button>
 
               {/* Notification Bell (Mobile) */}
-              {alerts && (
+              {user && (
                 <div ref={mobileNotifRef} className="relative z-50 shrink-0">
                   <button
                     type="button"
                     onClick={() => setIsMobileNotifDropdownOpen(!isMobileNotifDropdownOpen)}
                     className={cn(
                       "relative p-3 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg transition-colors focus:outline-none active:scale-95",
-                      alerts.length > 0
+                      activeAlerts.length > 0
                         ? "bg-amber-500/10 text-amber-500 dark:text-amber-400 animate-[pulse_2.2s_infinite]"
                         : "hover:bg-muted text-muted-foreground hover:text-foreground"
                     )}
                     title="Notifikasi"
                   >
-                    <Bell className={cn("w-5 h-5", alerts.length > 0 && "animate-[bounce_2s_infinite]")} />
-                    {alerts.length > 0 && (
+                    <Bell className={cn("w-5 h-5", activeAlerts.length > 0 && "animate-[bounce_2s_infinite]")} />
+                    {activeAlerts.length > 0 && (
                       <span className="absolute top-1.5 right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white shadow-sm shadow-red-500/30">
-                        {alerts.length}
+                        {activeAlerts.length}
                       </span>
                     )}
                   </button>

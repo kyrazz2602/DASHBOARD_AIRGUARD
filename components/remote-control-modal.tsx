@@ -103,7 +103,7 @@ function RadarView({
       </div>
 
       {/* Live Telemetry Display */}
-      <div className="absolute top-3 right-3 lg:top-4 lg:right-4 z-20 flex flex-col gap-2 p-3 rounded-xl bg-slate-950/85 border border-slate-800 text-[11px] font-mono text-slate-300 min-w-[140px] shadow-lg shadow-black/50 pointer-events-none">
+      <div className="absolute top-3 left-3 lg:top-4 lg:left-auto lg:right-4 z-20 flex flex-col gap-2 p-3 rounded-xl bg-slate-950/85 border border-slate-800 text-[11px] font-mono text-slate-300 min-w-[140px] shadow-lg shadow-black/50 pointer-events-none">
         <div className="text-[10px] text-cyan-400 font-bold uppercase tracking-wider border-b border-slate-800 pb-1 flex items-center justify-between">
           <span>Telemetri Gerak</span>
           <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping" />
@@ -119,6 +119,14 @@ function RadarView({
             <span className={cn("font-bold", activeDir ? "text-emerald-400 animate-pulse" : "text-slate-400")}>
               {activeDir ? "BERGERAK" : "DIAM"}
             </span>
+          </div>
+          <div className="flex justify-between gap-4 border-t border-slate-900 pt-1.5">
+            <span className="text-slate-400">RPM Kiri:</span>
+            <span className="font-bold text-cyan-300">{deviceStatus?.rpmKiri !== undefined ? deviceStatus.rpmKiri.toFixed(1) : "0.0"}</span>
+          </div>
+          <div className="flex justify-between gap-4">
+            <span className="text-slate-400">RPM Kanan:</span>
+            <span className="font-bold text-cyan-300">{deviceStatus?.rpmKanan !== undefined ? deviceStatus.rpmKanan.toFixed(1) : "0.0"}</span>
           </div>
         </div>
       </div>
@@ -154,12 +162,10 @@ function RadarView({
 function DPad({
   onPressStart,
   onPressEnd,
-  onStop,
   activeDir,
 }: {
   onPressStart: (dir: "up" | "down" | "left" | "right") => void;
   onPressEnd: () => void;
-  onStop: () => void;
   activeDir: string | null;
 }) {
   const SIZE = 200;
@@ -305,18 +311,7 @@ function DPad({
         })}
       </svg>
 
-      {/* Emergency STOP Button in the center (fully responsive, meets touch requirements) */}
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          onStop();
-        }}
-        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-14 h-14 rounded-full bg-red-650 hover:bg-red-555 text-white font-black text-xs uppercase flex items-center justify-center border-2 border-white shadow-[0_0_15px_rgba(239,68,68,0.8)] active:scale-95 transition-all z-30 min-h-[44px] min-w-[44px] cursor-pointer"
-        title="EMERGENCY STOP (Space)"
-      >
-        STOP
-      </button>
+
     </div>
   );
 }
@@ -574,7 +569,7 @@ export function RemoteControlModal({
       </div>
 
       {/* Body */}
-      <div className="flex-1 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden relative">
+      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden relative">
         {/* Radar */}
         <RadarView
           posX={position.x}
@@ -598,7 +593,6 @@ export function RemoteControlModal({
           <DPad
             onPressStart={handlePressStart}
             onPressEnd={handlePressEnd}
-            onStop={handleStop}
             activeDir={activeDir}
           />
 

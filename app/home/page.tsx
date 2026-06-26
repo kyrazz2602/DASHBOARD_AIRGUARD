@@ -734,7 +734,7 @@ function FeatureCard({
 }) {
   return (
     <div
-      className={`group relative p-7 rounded-3xl border backdrop-blur-sm transition-all duration-500
+      className={`group relative p-5 sm:p-7 rounded-3xl border backdrop-blur-sm transition-all duration-500
         hover:-translate-y-1.5 hover:shadow-2xl ${glowColor}
         ${
           highlight
@@ -806,7 +806,7 @@ function FilterCard({
 }) {
   return (
     <div
-      className={`group relative flex-1 flex flex-col p-7 rounded-3xl border backdrop-blur-sm transition-all duration-500
+      className={`group relative flex-1 flex flex-col p-5 sm:p-7 rounded-3xl border backdrop-blur-sm transition-all duration-500
         hover:-translate-y-1.5 hover:shadow-2xl
         ${
           featured
@@ -933,7 +933,7 @@ function SensorMetric({
 
   return (
     <div
-      className={`group relative p-7 rounded-3xl border bg-card/40 backdrop-blur-sm transition-all duration-500
+      className={`group relative p-5 sm:p-7 rounded-3xl border bg-card/40 backdrop-blur-sm transition-all duration-500
         hover:-translate-y-1 hover:shadow-2xl hover:bg-card/70 ${accentBorder} hover:border-opacity-60`}
     >
       {/* Top accent line */}

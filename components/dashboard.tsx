@@ -247,7 +247,7 @@ export default function Dashboard({ user }: { user: User }) {
         </div>
       )}
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 py-6 md:py-8 pb-24 md:pb-10 space-y-12">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 py-6 md:py-8 pb-24 md:pb-10 flex flex-col gap-12 sm:gap-16">
         {/* ── Header & Banner Block ── */}
         <div className="space-y-6">
           {/* Critical Battery Alert Banner */}
@@ -263,10 +263,10 @@ export default function Dashboard({ user }: { user: User }) {
                 <div className="space-y-1">
                   <h3 className="font-extrabold text-sm md:text-base tracking-wide text-rose-200 flex items-center gap-2">
                     <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping shrink-0" />
-                    Daya Baterai Sensor Kritis (0%)
+                    Baterai Hampir Habis
                   </h3>
                   <p className="text-xs md:text-sm text-slate-300 leading-relaxed font-semibold">
-                    Perangkat sensor akan segera mati. Hubungkan ke pengisi daya atau ganti baterai untuk menjaga kelangsungan pemantauan kualitas udara.
+                    Segera hubungkan ke pengisi daya untuk menjaga kelangsungan pemantauan kualitas udara.
                   </p>
                 </div>
               </div>

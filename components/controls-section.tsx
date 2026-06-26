@@ -133,7 +133,7 @@ export function ControlsSection({
         </div>
 
         {/* Fan Control Card */}
-        <Card className="p-5 bg-card border border-border/60 overflow-hidden relative">
+        <Card className="p-5 sm:p-6 bg-card border border-border/60 overflow-hidden relative">
           {/* Subtle bg decoration */}
           {isAutoMode && (
             <div className="absolute -top-8 -right-8 opacity-[0.04] pointer-events-none">

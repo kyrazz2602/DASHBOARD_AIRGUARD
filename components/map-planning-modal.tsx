@@ -24,6 +24,7 @@ export function MapPlanningModal({ isOpen, onClose, onSwitchToManual }: MapPlann
   const [isSending, setIsSending] = useState(false);
   const [sentStatus, setSentStatus] = useState<"idle" | "success" | "error">("idle");
   const [isInstructionsOpen, setIsInstructionsOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   // States for manual input synchronization
   const [inputX, setInputX] = useState("");
@@ -742,7 +743,7 @@ export function MapPlanningModal({ isOpen, onClose, onSwitchToManual }: MapPlann
       </div>
 
       {/* Body */}
-      <div className="flex-1 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden">
+      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
         {/* Interactive Grid Map */}
         <div className="flex-1 w-full min-h-[35vh] lg:min-h-0 relative flex items-center justify-center p-4 lg:p-6 select-none bg-slate-950/20">
           <div className="relative w-full max-w-[400px] lg:max-w-[480px] aspect-square rounded-2xl border border-slate-800 bg-black/40 overflow-hidden shadow-2xl">
@@ -797,10 +798,10 @@ export function MapPlanningModal({ isOpen, onClose, onSwitchToManual }: MapPlann
 
         {/* Sidebar Info Panel */}
         <div
-          className="p-4 lg:px-5 lg:py-6 flex flex-col justify-between gap-4 lg:gap-6 shrink-0 lg:w-80 border-t lg:border-t-0 lg:border-l"
+          className="p-4 lg:px-5 lg:py-6 flex flex-col justify-between gap-4 lg:gap-6 shrink-0 lg:w-80 border-t lg:border-t-0 lg:border-l overflow-hidden"
           style={{ background: C.bgAlt, borderColor: `${C.neon}18` }}
         >
-          <div className="space-y-4 overflow-y-auto pr-1">
+          <div className="flex-1 min-h-0 space-y-4 overflow-y-auto pr-1">
             <div className="space-y-1">
               <h3 className="text-xs lg:text-sm font-bold text-slate-200 uppercase tracking-wider">Navigasi Rute Otomatis</h3>
               <p className="text-[11px] lg:text-xs text-slate-300">
@@ -808,86 +809,101 @@ export function MapPlanningModal({ isOpen, onClose, onSwitchToManual }: MapPlann
               </p>
             </div>
 
-            {/* ROSBridge Connection Settings Card */}
-            <div className="p-3 lg:p-4 rounded-xl bg-slate-900/50 border border-slate-800 space-y-2.5">
-              <div className="flex justify-between items-center text-[10px] lg:text-xs">
-                <span className="text-slate-300 font-semibold flex items-center gap-1">
-                  <Radio className="w-3.5 h-3.5" style={{ color: C.neon }} />
-                  ROSBridge WebSocket
-                </span>
-                <span className={cn(
-                  "text-[8px] lg:text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider border",
-                  connStatus === "connected" && "bg-emerald-950 text-emerald-300 border-emerald-500",
-                  connStatus === "connecting" && "bg-amber-950 text-amber-300 border-amber-500 animate-pulse",
-                  connStatus === "disconnected" && "bg-slate-800 text-slate-100 border-slate-600"
-                )}>
-                  {connStatus}
-                </span>
-              </div>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={wsUrl}
-                  onChange={(e) => setWsUrl(e.target.value)}
-                  disabled={connStatus !== "disconnected"}
-                  placeholder="ws://192.168.1.100:9090"
-                  className="flex-1 bg-black/40 border border-slate-800 rounded-lg px-2 py-1 text-[11px] font-mono text-white outline-none focus:border-cyan-500/50 disabled:opacity-60"
-                />
-                <button
-                  onClick={handleToggleConnect}
-                  className={cn(
-                    "px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase transition-all duration-200 border-0 cursor-pointer min-h-[30px]",
-                    connStatus === "disconnected" 
-                      ? "bg-cyan-500 hover:bg-cyan-400 text-black" 
-                      : "bg-red-500/20 hover:bg-red-500/35 text-red-200"
-                  )}
-                >
-                  {connStatus === "disconnected" ? "Connect" : "Stop"}
-                </button>
-              </div>
-            </div>
+            {/* Toggle Button for Connection & Coordinates manual inputs on Mobile */}
+            <button
+              type="button"
+              onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+              className="w-full lg:hidden py-2 px-3 rounded-lg border border-slate-800 bg-slate-900/50 hover:bg-slate-900/80 text-[11px] font-bold text-slate-300 transition-all flex items-center justify-between min-h-[40px] cursor-pointer"
+            >
+              <span>Koneksi & Koordinat Manual</span>
+              <span className="text-[9px] text-cyan-400 font-mono">
+                {isSettingsOpen ? "▲ Sembunyikan" : "▼ Tampilkan"}
+              </span>
+            </button>
 
-            {/* Coordinates Display Card */}
-            <div className="p-3 lg:p-4 rounded-xl bg-slate-900/50 border border-slate-800 space-y-2 lg:space-y-3">
-              <div className="flex justify-between items-center text-[10px] lg:text-xs">
-                <span className="text-slate-200 font-mono font-semibold">Coordinate (Meter)</span>
-                <span className="text-[9px] px-2 py-0.5 rounded-full font-bold bg-slate-800 border border-slate-700 text-slate-300 uppercase font-sans">
-                  Origin: (0.0, 0.0)
-                </span>
-              </div>
-              <div className="grid grid-cols-2 gap-2 text-center">
-                <div className="p-1.5 lg:p-2 rounded-lg bg-black/30 border border-slate-800">
-                  <label htmlFor="target-x-input" className="text-[9px] lg:text-[10px] text-slate-300 font-bold uppercase block mb-1">
-                    Target X
-                  </label>
-                  <div className="relative flex items-center">
-                    <input
-                      id="target-x-input"
-                      type="number"
-                      step="0.01"
-                      placeholder="—"
-                      value={inputX}
-                      onChange={(e) => handleXInputChange(e.target.value)}
-                      className="w-full bg-black/50 border border-slate-800 rounded px-2 py-1 text-xs lg:text-sm font-mono font-bold text-white text-center outline-none focus:border-cyan-500/50 transition-colors"
-                    />
-                    <span className="absolute right-2 text-[10px] text-slate-500 pointer-events-none">m</span>
-                  </div>
+            {/* Collapsible Container */}
+            <div className={cn("space-y-3", !isSettingsOpen && "hidden lg:block")}>
+              {/* ROSBridge Connection Settings Card */}
+              <div className="p-3 lg:p-4 rounded-xl bg-slate-900/50 border border-slate-800 space-y-2.5">
+                <div className="flex justify-between items-center text-[10px] lg:text-xs">
+                  <span className="text-slate-300 font-semibold flex items-center gap-1">
+                    <Radio className="w-3.5 h-3.5" style={{ color: C.neon }} />
+                    ROSBridge WebSocket
+                  </span>
+                  <span className={cn(
+                    "text-[8px] lg:text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider border",
+                    connStatus === "connected" && "bg-emerald-950 text-emerald-300 border-emerald-500",
+                    connStatus === "connecting" && "bg-amber-950 text-amber-300 border-amber-500 animate-pulse",
+                    connStatus === "disconnected" && "bg-slate-800 text-slate-100 border-slate-600"
+                  )}>
+                    {connStatus}
+                  </span>
                 </div>
-                <div className="p-1.5 lg:p-2 rounded-lg bg-black/30 border border-slate-800">
-                  <label htmlFor="target-y-input" className="text-[9px] lg:text-[10px] text-slate-300 font-bold uppercase block mb-1">
-                    Target Y
-                  </label>
-                  <div className="relative flex items-center">
-                    <input
-                      id="target-y-input"
-                      type="number"
-                      step="0.01"
-                      placeholder="—"
-                      value={inputY}
-                      onChange={(e) => handleYInputChange(e.target.value)}
-                      className="w-full bg-black/50 border border-slate-800 rounded px-2 py-1 text-xs lg:text-sm font-mono font-bold text-white text-center outline-none focus:border-cyan-500/50 transition-colors"
-                    />
-                    <span className="absolute right-2 text-[10px] text-slate-500 pointer-events-none">m</span>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={wsUrl}
+                    onChange={(e) => setWsUrl(e.target.value)}
+                    disabled={connStatus !== "disconnected"}
+                    placeholder="ws://192.168.1.100:9090"
+                    className="flex-1 bg-black/40 border border-slate-800 rounded-lg px-2 py-1 text-[11px] font-mono text-white outline-none focus:border-cyan-500/50 disabled:opacity-60"
+                  />
+                  <button
+                    onClick={handleToggleConnect}
+                    className={cn(
+                      "px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase transition-all duration-200 border-0 cursor-pointer min-h-[30px]",
+                      connStatus === "disconnected" 
+                        ? "bg-cyan-500 hover:bg-cyan-400 text-black" 
+                        : "bg-red-500/20 hover:bg-red-500/35 text-red-200"
+                    )}
+                  >
+                    {connStatus === "disconnected" ? "Connect" : "Stop"}
+                  </button>
+                </div>
+              </div>
+
+              {/* Coordinates Display Card */}
+              <div className="p-3 lg:p-4 rounded-xl bg-slate-900/50 border border-slate-800 space-y-2 lg:space-y-3">
+                <div className="flex justify-between items-center text-[10px] lg:text-xs">
+                  <span className="text-slate-200 font-mono font-semibold">Coordinate (Meter)</span>
+                  <span className="text-[9px] px-2 py-0.5 rounded-full font-bold bg-slate-800 border border-slate-700 text-slate-300 uppercase font-sans">
+                    Origin: (0.0, 0.0)
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-center">
+                  <div className="p-1.5 lg:p-2 rounded-lg bg-black/30 border border-slate-800">
+                    <label htmlFor="target-x-input" className="text-[9px] lg:text-[10px] text-slate-300 font-bold uppercase block mb-1">
+                      Target X
+                    </label>
+                    <div className="relative flex items-center">
+                      <input
+                        id="target-x-input"
+                        type="number"
+                        step="0.01"
+                        placeholder="—"
+                        value={inputX}
+                        onChange={(e) => handleXInputChange(e.target.value)}
+                        className="w-full bg-black/50 border border-slate-800 rounded px-2 py-1 text-xs lg:text-sm font-mono font-bold text-white text-center outline-none focus:border-cyan-500/50 transition-colors"
+                      />
+                      <span className="absolute right-2 text-[10px] text-slate-500 pointer-events-none">m</span>
+                    </div>
+                  </div>
+                  <div className="p-1.5 lg:p-2 rounded-lg bg-black/30 border border-slate-800">
+                    <label htmlFor="target-y-input" className="text-[9px] lg:text-[10px] text-slate-300 font-bold uppercase block mb-1">
+                      Target Y
+                    </label>
+                    <div className="relative flex items-center">
+                      <input
+                        id="target-y-input"
+                        type="number"
+                        step="0.01"
+                        placeholder="—"
+                        value={inputY}
+                        onChange={(e) => handleYInputChange(e.target.value)}
+                        className="w-full bg-black/50 border border-slate-800 rounded px-2 py-1 text-xs lg:text-sm font-mono font-bold text-white text-center outline-none focus:border-cyan-500/50 transition-colors"
+                      />
+                      <span className="absolute right-2 text-[10px] text-slate-500 pointer-events-none">m</span>
+                    </div>
                   </div>
                 </div>
               </div>
