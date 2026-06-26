@@ -129,8 +129,14 @@ export function listenToDeviceStatus(
         callback({
           kipas: (((data.kipas !== undefined ? data.kipas : data.speed) as string)?.toLowerCase() as FanSpeed) || "off",
           gerak: String(data.gerak || "DIAM"),
-          rpmKanan: Number(data.rpmKanan !== undefined ? data.rpmKanan : (data.rpm_right !== undefined ? data.rpm_right : 0)),
-          rpmKiri: Number(data.rpmKiri !== undefined ? data.rpmKiri : (data.rpm_left !== undefined ? data.rpm_left : 0)),
+          rpmKanan: (() => {
+            const val = Number(data.rpmKanan !== undefined ? data.rpmKanan : (data.rpm_right !== undefined ? data.rpm_right : 0));
+            return Math.abs(val) < 1.0 ? 0 : val;
+          })(),
+          rpmKiri: (() => {
+            const val = Number(data.rpmKiri !== undefined ? data.rpmKiri : (data.rpm_left !== undefined ? data.rpm_left : 0));
+            return Math.abs(val) < 1.0 ? 0 : val;
+          })(),
           x: data.x !== undefined ? Number(data.x) : undefined,
           y: data.y !== undefined ? Number(data.y) : undefined,
           yaw: data.yaw !== undefined ? Number(data.yaw) : undefined,
