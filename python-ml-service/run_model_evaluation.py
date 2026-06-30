@@ -54,45 +54,45 @@ def evaluate_scenarios():
 
     # Define 30 scenarios representing different air conditions
     # Standard thresholds:
-    # Safe: PM2.5 <= 35.4, PM10 <= 154, CO <= 15, VOC <= 20
-    # Warning: PM2.5 <= 125.4, PM10 <= 354, CO <= 50, VOC <= 100
-    # Danger: PM2.5 > 125.4 OR PM10 > 354 OR CO > 50 OR VOC > 100
+    # Safe: PM2.5 <= 35.4, PM10 <= 154, CO <= 15, VOC < 0.3
+    # Warning: PM2.5 <= 125.4, PM10 <= 354, CO <= 50, VOC <= 1.0
+    # Danger: PM2.5 > 125.4 OR PM10 > 354 OR CO > 50 OR VOC > 1.0
     scenarios = [
         # --- AMAN (SAFE) ---
-        {"id": 1, "name": "Clean Air (Perfect)", "pm25": 8.5, "pm10": 12.0, "co": 2.1, "voc": 1.2, "suhu": 24.5, "expected": "Aman"},
-        {"id": 2, "name": "Typical Indoor", "pm25": 12.0, "pm10": 18.5, "co": 3.5, "voc": 2.0, "suhu": 25.0, "expected": "Aman"},
-        {"id": 3, "name": "Cool Morning", "pm25": 15.0, "pm10": 22.0, "co": 4.0, "voc": 3.1, "suhu": 21.0, "expected": "Aman"},
-        {"id": 4, "name": "Warm Afternoon", "pm25": 20.0, "pm10": 30.0, "co": 5.0, "voc": 4.2, "suhu": 29.5, "expected": "Aman"},
-        {"id": 5, "name": "Dry Indoor", "pm25": 18.0, "pm10": 28.0, "co": 3.0, "voc": 2.5, "suhu": 26.0, "expected": "Aman"},
-        {"id": 6, "name": "Rainy Day Calm", "pm25": 10.0, "pm10": 15.0, "co": 2.8, "voc": 1.5, "suhu": 22.0, "expected": "Aman"},
-        {"id": 7, "name": "AC Room Stable", "pm25": 7.0, "pm10": 11.0, "co": 1.9, "voc": 0.9, "suhu": 18.0, "expected": "Aman"},
-        {"id": 8, "name": "Kitchen Fan Running", "pm25": 25.0, "pm10": 40.0, "co": 8.0, "voc": 6.0, "suhu": 27.0, "expected": "Aman"},
-        {"id": 9, "name": "Bedroom Night", "pm25": 9.0, "pm10": 14.0, "co": 2.5, "voc": 1.8, "suhu": 23.0, "expected": "Aman"},
-        {"id": 10, "name": "Library Silent", "pm25": 11.0, "pm10": 16.0, "co": 3.0, "voc": 2.2, "suhu": 24.0, "expected": "Aman"},
+        {"id": 1, "name": "Clean Air (Perfect)", "pm25": 8.5, "pm10": 12.0, "co": 2.1, "voc": 0.012, "suhu": 24.5, "expected": "Aman"},
+        {"id": 2, "name": "Typical Indoor", "pm25": 12.0, "pm10": 18.5, "co": 3.5, "voc": 0.02, "suhu": 25.0, "expected": "Aman"},
+        {"id": 3, "name": "Cool Morning", "pm25": 15.0, "pm10": 22.0, "co": 4.0, "voc": 0.031, "suhu": 21.0, "expected": "Aman"},
+        {"id": 4, "name": "Warm Afternoon", "pm25": 20.0, "pm10": 30.0, "co": 5.0, "voc": 0.042, "suhu": 29.5, "expected": "Aman"},
+        {"id": 5, "name": "Dry Indoor", "pm25": 18.0, "pm10": 28.0, "co": 3.0, "voc": 0.025, "suhu": 26.0, "expected": "Aman"},
+        {"id": 6, "name": "Rainy Day Calm", "pm25": 10.0, "pm10": 15.0, "co": 2.8, "voc": 0.015, "suhu": 22.0, "expected": "Aman"},
+        {"id": 7, "name": "AC Room Stable", "pm25": 7.0, "pm10": 11.0, "co": 1.9, "voc": 0.009, "suhu": 18.0, "expected": "Aman"},
+        {"id": 8, "name": "Kitchen Fan Running", "pm25": 25.0, "pm10": 40.0, "co": 8.0, "voc": 0.06, "suhu": 27.0, "expected": "Aman"},
+        {"id": 9, "name": "Bedroom Night", "pm25": 9.0, "pm10": 14.0, "co": 2.5, "voc": 0.018, "suhu": 23.0, "expected": "Aman"},
+        {"id": 10, "name": "Library Silent", "pm25": 11.0, "pm10": 16.0, "co": 3.0, "voc": 0.022, "suhu": 24.0, "expected": "Aman"},
         
         # --- PERHATIAN (WARNING) ---
-        {"id": 11, "name": "Hazy Day (PM2.5 warning)", "pm25": 45.0, "pm10": 60.0, "co": 6.0, "voc": 4.0, "suhu": 26.5, "expected": "Perhatian"},
-        {"id": 12, "name": "Dust Buildup (PM10 warning)", "pm25": 20.0, "pm10": 165.0, "co": 5.0, "voc": 3.5, "suhu": 25.0, "expected": "Perhatian"},
-        {"id": 13, "name": "Mild Exhaust (CO warning)", "pm25": 15.0, "pm10": 22.0, "co": 18.5, "voc": 5.0, "suhu": 24.0, "expected": "Perhatian"},
-        {"id": 14, "name": "Perfume Spray (VOC warning)", "pm25": 12.0, "pm10": 18.0, "co": 4.0, "voc": 25.0, "suhu": 25.5, "expected": "Perhatian"},
-        {"id": 15, "name": "Elevated Particles & Gas", "pm25": 38.0, "pm10": 80.0, "co": 8.0, "voc": 22.0, "suhu": 26.0, "expected": "Perhatian"},
-        {"id": 16, "name": "Busy Traffic Haze", "pm25": 55.0, "pm10": 90.0, "co": 12.0, "voc": 15.0, "suhu": 28.0, "expected": "Perhatian"},
-        {"id": 17, "name": "Mild Smoke Indoors", "pm25": 65.0, "pm10": 110.0, "co": 14.0, "voc": 18.0, "suhu": 27.5, "expected": "Perhatian"},
-        {"id": 18, "name": "High Humidity Dust", "pm25": 30.0, "pm10": 180.0, "co": 7.0, "voc": 10.0, "suhu": 23.0, "expected": "Perhatian"},
-        {"id": 19, "name": "Stuffy Closed Room", "pm25": 32.0, "pm10": 45.0, "co": 16.0, "voc": 21.0, "suhu": 25.0, "expected": "Perhatian"},
-        {"id": 20, "name": "Cooking/Frying Vapors", "pm25": 80.0, "pm10": 140.0, "co": 12.0, "voc": 15.0, "suhu": 29.0, "expected": "Perhatian"},
+        {"id": 11, "name": "Hazy Day (PM2.5 warning)", "pm25": 45.0, "pm10": 60.0, "co": 6.0, "voc": 0.04, "suhu": 26.5, "expected": "Perhatian"},
+        {"id": 12, "name": "Dust Buildup (PM10 warning)", "pm25": 20.0, "pm10": 165.0, "co": 5.0, "voc": 0.035, "suhu": 25.0, "expected": "Perhatian"},
+        {"id": 13, "name": "Mild Exhaust (CO warning)", "pm25": 15.0, "pm10": 22.0, "co": 18.5, "voc": 0.05, "suhu": 24.0, "expected": "Perhatian"},
+        {"id": 14, "name": "Perfume Spray (VOC warning)", "pm25": 12.0, "pm10": 18.0, "co": 4.0, "voc": 0.45, "suhu": 25.5, "expected": "Perhatian"},
+        {"id": 15, "name": "Elevated Particles & Gas", "pm25": 38.0, "pm10": 80.0, "co": 8.0, "voc": 0.42, "suhu": 26.0, "expected": "Perhatian"},
+        {"id": 16, "name": "Busy Traffic Haze", "pm25": 55.0, "pm10": 90.0, "co": 12.0, "voc": 0.15, "suhu": 28.0, "expected": "Perhatian"},
+        {"id": 17, "name": "Mild Smoke Indoors", "pm25": 65.0, "pm10": 110.0, "co": 14.0, "voc": 0.18, "suhu": 27.5, "expected": "Perhatian"},
+        {"id": 18, "name": "High Humidity Dust", "pm25": 30.0, "pm10": 180.0, "co": 7.0, "voc": 0.1, "suhu": 23.0, "expected": "Perhatian"},
+        {"id": 19, "name": "Stuffy Closed Room", "pm25": 32.0, "pm10": 45.0, "co": 16.0, "voc": 0.38, "suhu": 25.0, "expected": "Perhatian"},
+        {"id": 20, "name": "Cooking/Frying Vapors", "pm25": 80.0, "pm10": 140.0, "co": 12.0, "voc": 0.15, "suhu": 29.0, "expected": "Perhatian"},
         
         # --- GANTI FILTER (DANGER) ---
-        {"id": 21, "name": "Severe Forest Fire Haze", "pm25": 160.0, "pm10": 210.0, "co": 18.0, "voc": 12.0, "suhu": 28.0, "expected": "Ganti Filter"},
-        {"id": 22, "name": "Extreme Construction Dust", "pm25": 80.0, "pm10": 380.0, "co": 15.0, "voc": 8.0, "suhu": 26.0, "expected": "Ganti Filter"},
-        {"id": 23, "name": "Dangerous CO Leakage", "pm25": 25.0, "pm10": 40.0, "co": 55.0, "voc": 15.0, "suhu": 24.5, "expected": "Ganti Filter"},
-        {"id": 24, "name": "Chemical Solvent Fumes", "pm25": 15.0, "pm10": 30.0, "co": 8.0, "voc": 110.0, "suhu": 25.0, "expected": "Ganti Filter"},
-        {"id": 25, "name": "Major Fire Smoke", "pm25": 250.0, "pm10": 420.0, "co": 65.0, "voc": 45.0, "suhu": 32.0, "expected": "Ganti Filter"},
-        {"id": 26, "name": "Industrial Exhaust Leak", "pm25": 180.0, "pm10": 290.0, "co": 45.0, "voc": 30.0, "suhu": 30.0, "expected": "Ganti Filter"},
-        {"id": 27, "name": "Incense in Closed Room", "pm25": 140.0, "pm10": 180.0, "co": 22.0, "voc": 85.0, "suhu": 26.0, "expected": "Ganti Filter"},
-        {"id": 28, "name": "Gas Stove Leak & Smoke", "pm25": 135.0, "pm10": 240.0, "co": 52.0, "voc": 35.0, "suhu": 28.5, "expected": "Ganti Filter"},
-        {"id": 29, "name": "Heavy Paint Vapors", "pm25": 30.0, "pm10": 70.0, "co": 12.0, "voc": 130.0, "suhu": 26.0, "expected": "Ganti Filter"},
-        {"id": 30, "name": "Filter Total Failure", "pm25": 175.0, "pm10": 390.0, "co": 58.0, "voc": 115.0, "suhu": 27.5, "expected": "Ganti Filter"}
+        {"id": 21, "name": "Severe Forest Fire Haze", "pm25": 160.0, "pm10": 210.0, "co": 18.0, "voc": 0.12, "suhu": 28.0, "expected": "Ganti Filter"},
+        {"id": 22, "name": "Extreme Construction Dust", "pm25": 80.0, "pm10": 380.0, "co": 15.0, "voc": 0.08, "suhu": 26.0, "expected": "Ganti Filter"},
+        {"id": 23, "name": "Dangerous CO Leakage", "pm25": 25.0, "pm10": 40.0, "co": 55.0, "voc": 0.15, "suhu": 24.5, "expected": "Ganti Filter"},
+        {"id": 24, "name": "Chemical Solvent Fumes", "pm25": 15.0, "pm10": 30.0, "co": 8.0, "voc": 1.1, "suhu": 25.0, "expected": "Ganti Filter"},
+        {"id": 25, "name": "Major Fire Smoke", "pm25": 250.0, "pm10": 420.0, "co": 65.0, "voc": 0.45, "suhu": 32.0, "expected": "Ganti Filter"},
+        {"id": 26, "name": "Industrial Exhaust Leak", "pm25": 180.0, "pm10": 290.0, "co": 45.0, "voc": 0.3, "suhu": 30.0, "expected": "Ganti Filter"},
+        {"id": 27, "name": "Incense in Closed Room", "pm25": 140.0, "pm10": 180.0, "co": 22.0, "voc": 0.85, "suhu": 26.0, "expected": "Ganti Filter"},
+        {"id": 28, "name": "Gas Stove Leak & Smoke", "pm25": 135.0, "pm10": 240.0, "co": 52.0, "voc": 0.35, "suhu": 28.5, "expected": "Ganti Filter"},
+        {"id": 29, "name": "Heavy Paint Vapors", "pm25": 30.0, "pm10": 70.0, "co": 12.0, "voc": 1.3, "suhu": 26.0, "expected": "Ganti Filter"},
+        {"id": 30, "name": "Filter Total Failure", "pm25": 175.0, "pm10": 390.0, "co": 58.0, "voc": 1.15, "suhu": 27.5, "expected": "Ganti Filter"}
     ]
 
     results = []
@@ -118,26 +118,9 @@ def evaluate_scenarios():
         raw_proba = model.predict_proba(scaled)[0]
         raw_status = loader.decode_label(predicted_idx)
         
-        # 5. Apply AI Guardrail check
-        pm25_val = float(current_features["PM25"].iloc[0])
-        pm10_val = float(current_features["PM10"].iloc[0])
-        co_val = float(current_features["CO"].iloc[0])
-        voc_val = float(current_features["VOC"].iloc[0])
-        
-        if pm25_val > 125.4 or pm10_val > 354.0 or co_val > 50.0 or voc_val > 100.0:
-            rule_status = "Ganti Filter"
-        elif pm25_val > 35.4 or pm10_val > 154.0 or co_val > 15.0 or voc_val > 20.0:
-            rule_status = "Perhatian"
-        else:
-            rule_status = "Aman"
-            
-        severity = {"Aman": 0, "Perhatian": 1, "Ganti Filter": 2}
+        # 5. Apply AI Guardrail check (AI Guardrails removed)
         final_status = raw_status
         guardrail_triggered = False
-        
-        if severity[rule_status] > severity[raw_status]:
-            final_status = rule_status
-            guardrail_triggered = True
             
         # Check prediction success
         is_raw_correct = (raw_status == sc["expected"])

@@ -26,7 +26,7 @@ export const WHO_STANDARDS = {
   PM2_5: { safe: 35.4, warning: 125.4, danger: 125.5 },
   PM10: { safe: 154, warning: 354, danger: 355 },
   CO: { safe: 15, warning: 50, danger: 50 },
-  VOC: { safe: 20, warning: 100, danger: 100 },
+  VOC: { safe: 0.3, warning: 1.0, danger: 1.0 },
 };
 
 export function generateSensorData(): SensorReading {
@@ -35,7 +35,7 @@ export function generateSensorData(): SensorReading {
     pm25: 12 + Math.sin(Date.now() / 5000) * 8 + Math.random() * 4,
     pm10: 18 + Math.cos(Date.now() / 4000) * 10 + Math.random() * 5,
     co: 15 + Math.sin(Date.now() / 6000) * 5 + Math.random() * 3,
-    voc: 8 + Math.cos(Date.now() / 5500) * 3 + Math.random() * 2,
+    voc: 0.4 + Math.sin(Date.now() / 7000) * 0.5 + Math.random() * 0.2,
     suhu: 25 + Math.sin(Date.now() / 7000) * 3 + Math.random() * 2,
   };
 
@@ -67,7 +67,7 @@ export function generateHistoricalData(days: number): HistoricalData[] {
           18 + Math.cos(dayOffset / 2.5) * 8 + Math.random() * 5,
         ),
         co: Math.max(0, 15 + Math.sin(dayOffset / 3) * 7 + Math.random() * 3),
-        voc: Math.max(0, 8 + Math.cos(dayOffset / 2.2) * 4 + Math.random() * 2),
+        voc: Math.max(0, 0.4 + Math.cos(dayOffset / 2.2) * 0.5 + Math.random() * 0.2),
         suhu: Math.max(0, 25 + Math.sin(dayOffset / 4) * 3 + Math.random() * 2),
         battery: Math.max(5, 100 - Math.floor(Math.random() * 20)),
         tegangan: Math.max(0, 12 + Math.random() * 4),
@@ -82,6 +82,11 @@ export function getStatusColor(
   value: number,
   type: keyof typeof WHO_STANDARDS,
 ): string {
+  if (type === "VOC") {
+    if (value < 0.3) return "bg-green-500";
+    if (value <= 1.0) return "bg-yellow-500";
+    return "bg-red-500";
+  }
   const standard = WHO_STANDARDS[type];
   if (value <= standard.safe) return "bg-green-500";
   if (value <= standard.warning) return "bg-yellow-500";
@@ -92,6 +97,11 @@ export function getStatusLabel(
   value: number,
   type: keyof typeof WHO_STANDARDS,
 ): string {
+  if (type === "VOC") {
+    if (value < 0.3) return "Safe";
+    if (value <= 1.0) return "Warning";
+    return "Danger";
+  }
   const standard = WHO_STANDARDS[type];
   if (value <= standard.safe) return "Safe";
   if (value <= standard.warning) return "Warning";

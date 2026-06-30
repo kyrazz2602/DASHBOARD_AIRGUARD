@@ -443,3 +443,16 @@ export async function getHistoricalData(
     );
   });
 }
+
+/**
+ * Mengirim perintah simpan peta ke /Command/save_map di Firebase
+ */
+export async function triggerSaveMap(): Promise<void> {
+  if (!isDbReady()) {
+    console.warn("[triggerSaveMap] Firebase Database not initialized.");
+    return;
+  }
+  const saveMapRef = ref(database, `${COMMAND_PATH}/save_map`);
+  await set(saveMapRef, true);
+}
+

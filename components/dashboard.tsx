@@ -66,7 +66,7 @@ export default function Dashboard({ user }: { user: User }) {
       { name: "PM2.5", value: sensorData.pm25, type: "PM2_5" as const, unit: "μg/m³" },
       { name: "PM10", value: sensorData.pm10, type: "PM10" as const, unit: "μg/m³" },
       { name: "CO", value: sensorData.co, type: "CO" as const, unit: "ppm" },
-      { name: "VOC", value: sensorData.voc, type: "VOC" as const, unit: "ppm" },
+      { name: "VOC", value: sensorData.voc, type: "VOC" as const, unit: "mg/m³" },
     ].map((param) => {
       const status = getStatusLabel(param.value, param.type);
       return {
@@ -75,6 +75,51 @@ export default function Dashboard({ user }: { user: User }) {
         isAlert: status !== "Safe",
       };
     }).filter((c) => c.isAlert);
+  }, [sensorData.pm25, sensorData.pm10, sensorData.co, sensorData.voc]);
+
+  const dangerParameters = useMemo(() => {
+    const list = [];
+    if (sensorData.pm25 > WHO_STANDARDS.PM2_5.danger) {
+      list.push({
+        name: "PM2.5",
+        value: sensorData.pm25,
+        unit: "μg/m³",
+        exceedFactor: (sensorData.pm25 / 15).toFixed(1),
+        safeLimit: "15 μg/m³",
+        recommendation: "Gunakan masker N95, hindari aktivitas luar ruangan, dan atur kecepatan kipas Air Purifier ke tingkat tinggi (HIGH).",
+      });
+    }
+    if (sensorData.pm10 > WHO_STANDARDS.PM10.danger) {
+      list.push({
+        name: "PM10",
+        value: sensorData.pm10,
+        unit: "μg/m³",
+        exceedFactor: (sensorData.pm10 / 45).toFixed(1),
+        safeLimit: "45 μg/m³",
+        recommendation: "Hindari aktivitas di luar ruangan, tutup jendela rapat-rapat, dan gunakan penyaring udara di dalam ruangan.",
+      });
+    }
+    if (sensorData.co > WHO_STANDARDS.CO.danger) {
+      list.push({
+        name: "CO",
+        value: sensorData.co,
+        unit: "ppm",
+        exceedFactor: (sensorData.co / 4).toFixed(1),
+        safeLimit: "4 ppm",
+        recommendation: "SEGERA KELUAR KE AREA TERBUKA! Buka pintu dan jendela lebar-lebar untuk ventilasi, serta matikan sumber pembakaran gas/asap.",
+      });
+    }
+    if (sensorData.voc > WHO_STANDARDS.VOC.danger) {
+      list.push({
+        name: "VOC",
+        value: sensorData.voc,
+        unit: "mg/m³",
+        exceedFactor: (sensorData.voc / 0.3).toFixed(1),
+        safeLimit: "0.3 mg/m³",
+        recommendation: "Buka ventilasi atau pastikan sirkulasi udara berjalan dengan baik, hindari penggunaan bahan kimia semprot, dan nyalakan pemurni udara.",
+      });
+    }
+    return list;
   }, [sensorData.pm25, sensorData.pm10, sensorData.co, sensorData.voc]);
 
   const firstName = useMemo(() => {
@@ -104,7 +149,7 @@ export default function Dashboard({ user }: { user: User }) {
       { name: "PM2.5", value: sensorData.pm25, type: "PM2_5" as const, unit: "μg/m³" },
       { name: "PM10", value: sensorData.pm10, type: "PM10" as const, unit: "μg/m³" },
       { name: "CO", value: sensorData.co, type: "CO" as const, unit: "ppm" },
-      { name: "VOC", value: sensorData.voc, type: "VOC" as const, unit: "ppm" },
+      { name: "VOC", value: sensorData.voc, type: "VOC" as const, unit: "mg/m³" },
     ].map((param) => {
       const status = getStatusLabel(param.value, param.type);
       return {
@@ -136,7 +181,7 @@ export default function Dashboard({ user }: { user: User }) {
       if (warningAlerts.length > 0) {
         const message = warningAlerts
           .map((alert) => {
-            return `${alert.name} dalam kondisi perhatian (${alert.value.toFixed(1)} ${alert.unit})`;
+            return `${alert.name} dalam kondisi perhatian (${alert.value.toFixed(2)} ${alert.unit})`;
           })
           .join("\n");
 
@@ -221,19 +266,28 @@ export default function Dashboard({ user }: { user: User }) {
                   <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping inline-block" />
                   PERINGATAN DARURAT KUALITAS UDARA!
                 </p>
-                <div className="text-xs md:text-sm text-red-100 mt-1 leading-relaxed">
-                  {sensorData.pm25 > WHO_STANDARDS.PM2_5.danger ? (
-                    <p className="mb-1.5">
-                      Kondisi <span className="font-bold text-white uppercase underline decoration-red-500 decoration-2">BERBAHAYA</span>: PM2.5 mencapai <span className="font-bold text-white bg-red-950/60 px-1.5 py-0.5 rounded border border-red-500/30">{sensorData.pm25.toFixed(1)} µg/m³</span> (<span className="font-bold text-white">{(sensorData.pm25 / 15).toFixed(1)}x lipat</span> di atas batas aman harian WHO 15 µg/m³).
-                    </p>
+                <div className="text-xs md:text-sm text-red-100 mt-1 leading-relaxed space-y-2">
+                  {dangerParameters.length > 0 ? (
+                    dangerParameters.map((param, index) => (
+                      <div key={index} className="border-b border-white/10 pb-2 last:border-0 last:pb-0">
+                        <p className="mb-1">
+                          Kondisi <span className="font-bold text-white uppercase underline decoration-red-500 decoration-2">BERBAHAYA</span>: {param.name} mencapai <span className="font-bold text-white bg-red-950/60 px-1.5 py-0.5 rounded border border-red-500/30">{param.value.toFixed(2)} {param.unit}</span> (<span className="font-bold text-white">{param.exceedFactor}x lipat</span> di atas batas aman harian WHO {param.safeLimit}).
+                        </p>
+                        <p className="font-semibold text-white bg-white/10 px-2.5 py-1 rounded inline-block mt-0.5">
+                          Rekomendasi: {param.recommendation}
+                        </p>
+                      </div>
+                    ))
                   ) : (
-                    <p className="mb-1.5">
-                      Kondisi <span className="font-bold text-white uppercase underline decoration-red-500 decoration-2">BERBAHAYA</span>: Parameter sensor melebihi batas aman kritis.
-                    </p>
+                    <div>
+                      <p className="mb-1">
+                        Kondisi <span className="font-bold text-white uppercase underline decoration-red-500 decoration-2">BERBAHAYA</span>: Analisis AI mendeteksi penurunan kinerja filter secara drastis (filter kritis).
+                      </p>
+                      <p className="font-semibold text-white bg-white/10 px-2.5 py-1 rounded inline-block mt-0.5">
+                        Rekomendasi: Segera lakukan penggantian filter Air Purifier untuk menjaga kualitas udara di dalam ruangan.
+                      </p>
+                    </div>
                   )}
-                  <p className="font-semibold text-white bg-white/10 px-2.5 py-1 rounded inline-block">
-                    Rekomendasi: Gunakan masker N95, hindari aktivitas outdoor, dan atur kecepatan kipas Air Purifier ke tingkat tinggi (HIGH).
-                  </p>
                 </div>
               </div>
             </div>
@@ -302,18 +356,11 @@ export default function Dashboard({ user }: { user: User }) {
               </h1>
               <div className="flex flex-wrap items-center gap-3 mt-2 md:mt-1.5">
                 <p className="text-xs sm:text-sm text-muted-foreground">{today}</p>
-                {(sensorData.battery === 0 || sensorData.suhu >= 33.0) && (
+                {sensorData.battery === 0 && (
                   <div className="flex items-center gap-1.5 flex-wrap">
-                    {sensorData.battery === 0 && (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full border border-red-500/20 bg-red-500/10 text-[10px] font-bold text-red-600 dark:text-red-400 animate-pulse">
-                        ⚠ Baterai kritis (0%)
-                      </span>
-                    )}
-                    {sensorData.suhu >= 33.0 && (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full border border-amber-500/20 bg-amber-500/10 text-[10px] font-bold text-amber-600 dark:text-amber-400">
-                        ⚠ Suhu sensor tinggi ({sensorData.suhu.toFixed(1)}°C)
-                      </span>
-                    )}
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full border border-red-500/20 bg-red-500/10 text-[10px] font-bold text-red-600 dark:text-red-400 animate-pulse">
+                      ⚠ Baterai kritis (0%)
+                    </span>
                   </div>
                 )}
               </div>
@@ -355,7 +402,7 @@ export default function Dashboard({ user }: { user: User }) {
             <SensorCard
               label="VOC"
               value={sensorData.voc}
-              unit="ppm"
+              unit="mg/m³"
               type="VOC"
               icon={<Leaf className="w-4 h-4" />}
               isLoading={isSensorLoading}
@@ -386,9 +433,7 @@ export default function Dashboard({ user }: { user: User }) {
                 confidence={confidence}
                 isMLAvailable={isMLAvailable}
                 isPredicting={isPredicting}
-                error={error}
                 selectedModel={selectedModel}
-                onModelChange={setSelectedModel}
                 predictedRulHours={predictedRulHours}
                 filterIntegrityPercent={filterIntegrityPercent}
               />
@@ -440,9 +485,7 @@ export default function Dashboard({ user }: { user: User }) {
                 confidence={confidence}
                 isMLAvailable={isMLAvailable}
                 isPredicting={isPredicting}
-                error={error}
                 selectedModel={selectedModel}
-                onModelChange={setSelectedModel}
                 predictedRulHours={predictedRulHours}
                 filterIntegrityPercent={filterIntegrityPercent}
               />

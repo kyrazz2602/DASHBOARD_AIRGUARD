@@ -12,7 +12,7 @@ class ModelLoader:
     """Load and expose the trained ML regression models, scaler, and feature columns."""
 
     AVAILABLE_MODELS = ["decision_tree", "random_forest"]
-    DEFAULT_MODEL = "decision_tree"
+    DEFAULT_MODEL = "random_forest"
 
     def __init__(self) -> None:
         models_dir = Path(__file__).parent / "models"

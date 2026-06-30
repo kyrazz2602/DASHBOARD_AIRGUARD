@@ -56,7 +56,7 @@ Di Firebase Console → Realtime Database → Rules:
 | `PM25`       | number | μg/m³  | Partikel 2.5 mikron        |
 | `PM10`       | number | μg/m³  | Partikel 10 mikron         |
 | `CO`         | number | ppm    | Karbon monoksida           |
-| `VOC`        | number | ppm    | Volatile Organic Compounds |
+| `VOC`        | number | mg/m³  | Volatile Organic Compounds |
 | `Suhu`       | number | °C     | Suhu udara                 |
 | `Tegangan`   | number | V      | Tegangan baterai           |
 | `Persentase` | number | %      | Persentase baterai         |

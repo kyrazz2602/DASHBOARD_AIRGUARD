@@ -36,12 +36,12 @@ export function getRuleBasedStatus(features: SensorFeatures): FilterStatus {
   const { pm25, pm10, co, voc } = features;
 
   // Check "Bahaya" threshold (most severe — check first)
-  if (pm25 > 125.4 || pm10 > 354 || co > 50 || voc > 100) {
+  if (pm25 > 125.4 || pm10 > 354 || co > 50 || voc > 1.0) {
     return "Bahaya";
   }
 
   // Check "Perhatian" threshold
-  if (pm25 > 35.4 || pm10 > 154 || co > 15 || voc > 20) {
+  if (pm25 > 35.4 || pm10 > 154 || co > 15 || voc >= 0.3) {
     return "Perhatian";
   }
 
@@ -86,7 +86,7 @@ export function extractFeatures(sensorData: {
 export async function predictFilterStatus(
   features: SensorFeatures,
   operatingHours: number = 0,
-  modelType: string = "decision_tree",
+  modelType: string = "random_forest",
 ): Promise<MLPredictionResult> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 5000);

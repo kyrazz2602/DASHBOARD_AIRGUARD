@@ -52,7 +52,7 @@ class PredictRequest(BaseModel):
     timestamp: str | None = None
     history: list[HistoryItem] | None = None
     operating_hours: float = 0.0
-    model_type: str = "decision_tree"
+    model_type: str = "random_forest"
 
 
 class PredictResponse(BaseModel):
@@ -169,35 +169,45 @@ def compute_features(history_df: pd.DataFrame, operating_hours: float) -> pd.Dat
 def get_recommendation(status: str, request: PredictRequest, integrity: float) -> str:
     """Return a human-readable recommendation based on predicted status, integrity, and sensor values."""
     if status == "Bahaya":
+        if request.pm25 > 75.0:
+            exceed = request.pm25 / 15.0
+            return (
+                f"Kondisi BERBAHAYA: PM2.5 mencapai {request.pm25:.2f} \u03bcg/m\u00b3 "
+                f"({exceed:.2f}x lipat di atas batas aman harian WHO 15 \u03bcg/m\u00b3). "
+                "Rekomendasi: Gunakan masker N95, hindari aktivitas outdoor, dan atur kecepatan kipas Air Purifier ke tingkat tinggi (HIGH)."
+            )
+        elif request.pm10 > 150.0:
+            exceed = request.pm10 / 45.0
+            return (
+                f"Kondisi BERBAHAYA: PM10 mencapai {request.pm10:.2f} \u03bcg/m\u00b3 "
+                f"({exceed:.2f}x lipat di atas batas aman harian WHO 45 \u03bcg/m\u00b3). "
+                "Rekomendasi: Gunakan masker, kurangi aktivitas luar ruangan, dan nyalakan Air Purifier pada tingkat maksimum."
+            )
+        elif request.co > 9.0:
+            exceed = request.co / 9.0
+            return (
+                f"Kondisi BERBAHAYA: Kadar CO mencapai {request.co:.2f} ppm "
+                f"({exceed:.2f}x lipat di atas batas aman harian WHO 9 ppm). "
+                "Rekomendasi: Segera buka ventilasi ruangan, matikan sumber gas, dan gunakan masker jika diperlukan."
+            )
+        elif request.voc > 1.0:
+            exceed = request.voc / 1.0
+            return (
+                f"Kondisi BERBAHAYA: Kadar VOC mencapai {request.voc:.2f} mg/m\u00b3 "
+                f"({exceed:.2f}x lipat di atas batas aman harian 1.0 mg/m\u00b3). "
+                "Rekomendasi: Pastikan sirkulasi udara luar lancar dan gunakan pembersih udara dengan karbon aktif."
+            )
         if integrity < 30.0:
-            return "Kondisi Bahaya! Filter sudah melewati batas aman efektif (< 30%). Segera ganti filter."
-        if request.pm25 > 75:
-            return (
-                f"Kondisi Bahaya! PM2.5 sangat tinggi ({request.pm25:.1f} \u03bcg/m\u00b3). "
-                "Gunakan masker N95 dan hindari aktivitas outdoor."
-            )
-        elif request.pm10 > 150:
-            return (
-                f"Kondisi Bahaya! PM10 melebihi batas aman ({request.pm10:.1f} \u03bcg/m\u00b3)."
-            )
-        elif request.co > 9:
-            return (
-                f"Kondisi Bahaya! Kadar CO berbahaya ({request.co:.1f} ppm). "
-                "Pastikan ventilasi ruangan segera dibuka."
-            )
-        else:
-            return "Kondisi Bahaya! Beberapa parameter melebihi batas aman kritis."
+            return f"Kondisi BERBAHAYA: Sisa umur pakai filter habis ({integrity:.2f}%). Rekomendasi: Segera ganti filter HEPA baru."
+        return "Kondisi BERBAHAYA: Beberapa parameter kualitas udara melebihi ambang batas keselamatan kritis."
 
     if status == "Perhatian":
         if 30.0 <= integrity < 70.0:
-            return "Perhatian: Efisiensi filter mulai menurun (kesehatan 30%-70%). Pertimbangkan penggantian filter dalam waktu dekat."
-        return (
-            "Pantau kondisi filter. Kualitas udara menurun \u2014 "
-            "pertimbangkan penggantian filter dalam 2-4 minggu."
-        )
+            return f"Perhatian: Kesehatan filter mulai menurun ({integrity:.2f}%). Rekomendasi: Bersihkan pra-filter dan jadwalkan penggantian unit filter HEPA dalam waktu dekat."
+        return "Perhatian: Kualitas udara menurun. Rekomendasi: Tutup jendela dan nyalakan Air Purifier pada mode otomatis."
 
     # "Aman"
-    return "Filter berfungsi normal. Kualitas udara dalam batas aman."
+    return "Filter berfungsi optimal dan kualitas udara berada dalam kondisi aman."
 
 
 def calculate_pseudo_probabilities(rul: float) -> dict[str, float]:

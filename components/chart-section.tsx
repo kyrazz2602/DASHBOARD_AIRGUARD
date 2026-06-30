@@ -58,16 +58,16 @@ const SENSOR_CONFIG = {
   voc: {
     label: "VOC",
     color: "#22C55E",
-    unit: "ppm",
+    unit: "mg/m³",
     description: "Volatile Organic Compounds",
     min: 0,
-    max: 8,
+    max: 2,
   },
   all: {
     label: "Gabungan",
     color: "#6366F1",
     unit: "",
-    description: "Grafik komparatif real-time (PM2.5 & PM10: μg/m³, CO & VOC: ppm)",
+    description: "Grafik komparatif real-time (PM2.5 & PM10: μg/m³, CO: ppm, VOC: mg/m³)",
     min: 0,
     max: 100,
   },
@@ -478,7 +478,7 @@ export function ChartSection() {
       "PM2.5 (μg/m³)",
       "PM10 (μg/m³)",
       "CO (ppm)",
-      "VOC (ppm)",
+      "VOC (mg/m³)",
       "Suhu (°C)",
       "Sumber Data",
     ];
@@ -575,7 +575,7 @@ export function ChartSection() {
       "PM2.5 (μg/m³)",
       "PM10 (μg/m³)",
       "CO (ppm)",
-      "VOC (ppm)",
+      "VOC (mg/m³)",
       "Suhu (°C)",
       "Sumber Data",
     ];
@@ -920,7 +920,7 @@ export function ChartSection() {
                 domain={[0, "auto"]}
               >
                 <Label
-                  value="Konsentrasi (μg/m³ / ppm)"
+                  value="Konsentrasi (μg/m³ / ppm / mg/m³)"
                   angle={-90}
                   position="insideLeft"
                   offset={-5}
@@ -998,7 +998,7 @@ export function ChartSection() {
                   strokeOpacity={0.8}
                 >
                   <Label
-                    value={`Batas Aman VOC: ${WHO_STANDARDS.VOC.safe} ppm`}
+                    value={`Batas Aman VOC: ${WHO_STANDARDS.VOC.safe} mg/m³`}
                     position="insideTopRight"
                     fill="#22C55E"
                     fontSize={10}
@@ -1049,7 +1049,7 @@ export function ChartSection() {
                 <Line
                   type="monotone"
                   dataKey="voc"
-                  name="VOC (ppm)"
+                  name="VOC (mg/m³)"
                   stroke="#22C55E"
                   strokeWidth={2}
                   dot={false}
@@ -1162,7 +1162,7 @@ export function ChartSection() {
       {/* ── Recording hint ── */}
       {isLive && !isRecording && selectedSensor === "all" && (
         <p className="text-[11px] text-muted-foreground text-center mt-3 animate-in fade-in duration-200">
-          Parameter memiliki satuan berbeda (ppm / μg/m³). Gunakan filter tombol di atas untuk memfokuskan grafik.
+          Parameter memiliki satuan berbeda (ppm / μg/m³ / mg/m³). Gunakan filter tombol di atas untuk memfokuskan grafik.
         </p>
       )}
       {isRecording && (
@@ -1215,7 +1215,7 @@ export function ChartSection() {
                 <p>
                   <span className="font-semibold text-foreground">VOC (Senyawa Organik Menguap):</span> Uap kimia dari cat, parfum, pembersih rumah, dan lem. Dapat memicu pusing, iritasi mata, dan gangguan pernapasan.
                   <br />
-                  <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">Aman: ≤20 ppm</span> | <span className="text-[10px] text-amber-600 dark:text-amber-400 font-bold">Perhatian: ≤100 ppm</span>
+                  <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">Aman: &lt; 0,3 mg/m³</span> | <span className="text-[10px] text-amber-600 dark:text-amber-400 font-bold">Perhatian: ≤ 1,0 mg/m³</span>
                 </p>
               </div>
             </div>

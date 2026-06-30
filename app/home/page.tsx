@@ -175,7 +175,7 @@ export default function HomePage() {
                   <p className="text-[10px] text-muted-foreground uppercase tracking-wide">
                     PM 2.5
                   </p>
-                  <p className="text-sm font-bold text-foreground">12 µg/m³</p>
+                  <p className="text-sm font-bold text-foreground">12 μg/m³</p>
                 </div>
               </div>
             </div>
@@ -535,12 +535,12 @@ export default function HomePage() {
             />
             <SensorMetric
               title="VOC"
-              unit="ppm"
+              unit="mg/m³"
               desc="Senyawa Organik Volatil"
               detail="Senyawa kimia organik yang mudah menguap dari cat, furnitur, dan produk pembersih rumah tangga."
-              limit="≤ 20"
-              safeValue={20}
-              exampleValue={1.8}
+              limit="< 0,3"
+              safeValue={0.3}
+              exampleValue={0.15}
               color="text-emerald-500"
               iconBg="from-emerald-500/20 to-green-500/10"
               accentBorder="border-emerald-500/30"
