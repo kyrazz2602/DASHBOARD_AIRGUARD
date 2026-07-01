@@ -227,6 +227,7 @@ export function Navbar({ alerts }: NavbarProps = {}) {
                 )}
               </button>
 
+
               {/* Notification Bell (Desktop) */}
               {user && (
                 <div ref={notifRef} className="relative z-50 shrink-0">
@@ -289,6 +290,7 @@ export function Navbar({ alerts }: NavbarProps = {}) {
 
             {/* --- MOBILE THEME TOGGLE / ACTIONS --- */}
             <div className="md:hidden flex items-center gap-1">
+
               <button
                 type="button"
                 onClick={() => setTheme(theme === "dark" ? "light" : "dark")}

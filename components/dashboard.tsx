@@ -317,7 +317,7 @@ export default function Dashboard({ user }: { user: User }) {
                 <div className="space-y-1">
                   <h3 className="font-extrabold text-sm md:text-base tracking-wide text-rose-200 flex items-center gap-2">
                     <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping shrink-0" />
-                    Baterai Hampir Habis
+                    Baterai Kritis (0%)
                   </h3>
                   <p className="text-xs md:text-sm text-slate-300 leading-relaxed font-semibold">
                     Segera hubungkan ke pengisi daya untuk menjaga kelangsungan pemantauan kualitas udara.
@@ -356,13 +356,6 @@ export default function Dashboard({ user }: { user: User }) {
               </h1>
               <div className="flex flex-wrap items-center gap-3 mt-2 md:mt-1.5">
                 <p className="text-xs sm:text-sm text-muted-foreground">{today}</p>
-                {sensorData.battery === 0 && (
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full border border-red-500/20 bg-red-500/10 text-[10px] font-bold text-red-600 dark:text-red-400 animate-pulse">
-                      ⚠ Baterai kritis (0%)
-                    </span>
-                  </div>
-                )}
               </div>
             </div>
           </div>

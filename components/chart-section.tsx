@@ -727,7 +727,7 @@ export function ChartSection() {
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="top" className="bg-card text-foreground border border-border shadow-lg p-2.5 max-w-[280px] text-center leading-normal">
-                  Klik <span className="font-semibold text-primary">Rekam CSV</span> untuk mulai merekam data real-time dari Firebase. Data tersimpan setiap update (~3 detik).
+                   Klik <span className="font-semibold text-primary">Rekam CSV</span> untuk mulai merekam data sensor secara langsung. Data tersimpan setiap update (~3 detik).
                 </TooltipContent>
               </Tooltip>
             )
@@ -898,8 +898,7 @@ export function ChartSection() {
                 tickFormatter={formatXAxis}
                 tick={{
                   fontSize: 11,
-                  fill: "currentColor",
-                  className: "text-muted-foreground",
+                  fill: "var(--muted-foreground)",
                 }}
                 tickLine={false}
                 axisLine={false}
@@ -911,8 +910,7 @@ export function ChartSection() {
               <YAxis
                 tick={{
                   fontSize: 11,
-                  fill: "currentColor",
-                  className: "text-muted-foreground",
+                  fill: "var(--muted-foreground)",
                 }}
                 tickLine={false}
                 axisLine={false}
@@ -925,8 +923,8 @@ export function ChartSection() {
                   position="insideLeft"
                   offset={-5}
                   style={{ textAnchor: "middle" }}
-                  fill="currentColor"
-                  className="text-muted-foreground font-semibold text-[11px] select-none"
+                  fill="var(--muted-foreground)"
+                  className="font-semibold text-[11px] select-none"
                 />
               </YAxis>
 
@@ -1088,8 +1086,7 @@ export function ChartSection() {
                 tickFormatter={formatXAxis}
                 tick={{
                   fontSize: 11,
-                  fill: "currentColor",
-                  className: "text-muted-foreground",
+                  fill: "var(--muted-foreground)",
                 }}
                 tickLine={false}
                 axisLine={false}
@@ -1101,8 +1098,7 @@ export function ChartSection() {
               <YAxis
                 tick={{
                   fontSize: 11,
-                  fill: "currentColor",
-                  className: "text-muted-foreground",
+                  fill: "var(--muted-foreground)",
                 }}
                 tickLine={false}
                 axisLine={false}
@@ -1115,8 +1111,8 @@ export function ChartSection() {
                   position="insideLeft"
                   offset={-5}
                   style={{ textAnchor: "middle" }}
-                  fill="currentColor"
-                  className="text-muted-foreground font-semibold text-[11px] select-none"
+                  fill="var(--muted-foreground)"
+                  className="font-semibold text-[11px] select-none"
                 />
               </YAxis>
 

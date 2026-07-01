@@ -218,3 +218,11 @@
     transform: translateY(200%);
   }
 }
+
+/* Recharts accessibility contrast overrides */
+.recharts-cartesian-axis-tick text {
+  fill: var(--muted-foreground) !important;
+}
+.recharts-label {
+  fill: var(--muted-foreground) !important;
+}
