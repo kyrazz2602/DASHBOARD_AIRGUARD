@@ -51,7 +51,7 @@ export function Navbar({ alerts }: NavbarProps = {}) {
       { name: "PM2.5", value: sensorData.pm25, type: "PM2_5" as const, unit: "μg/m³" },
       { name: "PM10", value: sensorData.pm10, type: "PM10" as const, unit: "μg/m³" },
       { name: "CO", value: sensorData.co, type: "CO" as const, unit: "ppm" },
-      { name: "VOC", value: sensorData.voc, type: "VOC" as const, unit: "ppm" },
+      { name: "VOC", value: sensorData.voc, type: "VOC" as const, unit: "mg/m³" },
     ].map((param) => {
       const status = getStatusLabel(param.value, param.type);
       return {
@@ -149,7 +149,7 @@ export function Navbar({ alerts }: NavbarProps = {}) {
               </div>
               <div className="text-right shrink-0">
                 <p className="text-xs font-extrabold text-foreground tabular-nums">
-                  {alert.value.toFixed(1)}
+                  {alert.value.toFixed(2)}
                 </p>
                 <p className="text-[9px] opacity-60 uppercase font-semibold">
                   {alert.unit}
@@ -227,6 +227,7 @@ export function Navbar({ alerts }: NavbarProps = {}) {
                 )}
               </button>
 
+
               {/* Notification Bell (Desktop) */}
               {user && (
                 <div ref={notifRef} className="relative z-50 shrink-0">
@@ -289,6 +290,7 @@ export function Navbar({ alerts }: NavbarProps = {}) {
 
             {/* --- MOBILE THEME TOGGLE / ACTIONS --- */}
             <div className="md:hidden flex items-center gap-1">
+
               <button
                 type="button"
                 onClick={() => setTheme(theme === "dark" ? "light" : "dark")}

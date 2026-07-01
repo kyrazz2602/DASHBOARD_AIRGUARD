@@ -92,7 +92,7 @@ export function useMLFilterEstimation(): MLFilterEstimationResult {
   const [error, setError] = useState<string | null>(null);
 
   // New RUL regression states
-  const [selectedModel, setSelectedModel] = useState<string>("decision_tree");
+  const [selectedModel, setSelectedModel] = useState<string>("random_forest");
   const [predictedRulHours, setPredictedRulHours] = useState<number | null>(null);
   const [filterIntegrityPercent, setFilterIntegrityPercent] = useState<number | null>(null);
 

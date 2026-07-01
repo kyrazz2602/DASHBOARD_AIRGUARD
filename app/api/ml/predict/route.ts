@@ -5,7 +5,7 @@ const SENSOR_RANGES = {
   pm25: { min: 0, max: 1000 },
   pm10: { min: 0, max: 2000 },
   co: { min: 0, max: 1000 },
-  voc: { min: 0, max: 50 },
+  voc: { min: 0, max: 10 },
   suhu: { min: -10, max: 60 },
 } as const;
 
@@ -25,18 +25,22 @@ function validateSensorField(
   value: unknown,
 ): string | null {
   if (value === null || value === undefined) {
-    return `${field} is required`;
+    return `${field} wajib diisi`;
   }
 
   const num = Number(value);
 
   if (!isFinite(num) || isNaN(num)) {
-    return `${field} must be a finite number`;
+    return `${field} harus berupa angka valid`;
+  }
+
+  if (field === "voc") {
+    return null;
   }
 
   const { min, max } = SENSOR_RANGES[field];
   if (num < min || num > max) {
-    return `${field} must be between ${min} and ${max}`;
+    return `${field} harus berada di antara ${min} dan ${max}`;
   }
 
   return null;
@@ -93,7 +97,7 @@ export async function POST(request: Request) {
         voc: Number(body.voc),
         suhu: Number(body.suhu),
         operating_hours: Number(body.operating_hours ?? 0),
-        model_type: String(body.model_type ?? "decision_tree"),
+        model_type: String(body.model_type ?? "random_forest"),
       }),
       signal: controller.signal,
     });

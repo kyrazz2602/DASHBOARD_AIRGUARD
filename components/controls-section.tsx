@@ -3,6 +3,7 @@
 import { Card } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import {
   Wind,
   Zap,
@@ -12,6 +13,13 @@ import {
   Loader2,
   Map,
   Radio,
+  ChevronDown,
+  ChevronUp,
+  Eye,
+  EyeOff,
+  LockKeyhole,
+  Signal,
+  RefreshCw,
 } from "lucide-react";
 import { RemoteControlModal } from "./remote-control-modal";
 import { MapPlanningModal } from "./map-planning-modal";
@@ -21,8 +29,21 @@ import {
   SensorReading,
 } from "@/lib/sensor-data";
 import { useFanControl } from "@/hooks/use-fan-control";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
+import {
+  triggerWifiChange,
+  listenToWifiStatus,
+  listenToDetectedWifis,
+  triggerWifiScan,
+} from "@/lib/firebase-data";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface ControlsSectionProps {
   onFanSpeedChange?: (speed: FanSpeed) => void;
@@ -81,6 +102,85 @@ export function ControlsSection({
     setManualSpeed,
     setAutoMode,
   } = useFanControl(recommendedSpeed);
+
+  const [wifiSsid, setWifiSsid] = useState("");
+  const [wifiPassword, setWifiPassword] = useState("");
+  const [wifiStatus, setWifiStatus] = useState({ wifiStatus: "", wifiError: "" });
+  const [isWifiConnecting, setIsWifiConnecting] = useState(false);
+  const [isWifiSettingsOpen, setIsWifiSettingsOpen] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [detectedWifis, setDetectedWifis] = useState<string[]>([]);
+  const [isManualSsid, setIsManualSsid] = useState(false);
+  const [selectedSsid, setSelectedSsid] = useState<string>("");
+  const [isScanning, setIsScanning] = useState(false);
+
+  useEffect(() => {
+    const unsubscribe = listenToWifiStatus((status) => {
+      setWifiStatus(status);
+      if (status.wifiStatus === "Connecting...") {
+        setIsWifiConnecting(true);
+      } else if (status.wifiStatus !== "") {
+        setIsWifiConnecting(false);
+      }
+    });
+    return unsubscribe;
+  }, []);
+
+  useEffect(() => {
+    const unsubscribe = listenToDetectedWifis((wifis) => {
+      setDetectedWifis(wifis);
+      setIsScanning(false);
+    });
+    return unsubscribe;
+  }, []);
+
+  const handleScanWifi = async () => {
+    setIsScanning(true);
+    try {
+      await triggerWifiScan();
+      // Reset scanning state automatically after 15 seconds if no response
+      setTimeout(() => setIsScanning(false), 15000);
+    } catch (err) {
+      console.error("Failed to trigger WiFi scan:", err);
+      setIsScanning(false);
+    }
+  };
+
+  const handleSelectWifi = (value: string) => {
+    setSelectedSsid(value);
+    if (value === "MANUAL") {
+      setIsManualSsid(true);
+      setWifiSsid("");
+    } else {
+      setIsManualSsid(false);
+      setWifiSsid(value);
+    }
+  };
+
+  const handleConnectWifi = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!wifiSsid.trim()) return;
+    setIsWifiConnecting(true);
+    try {
+      await triggerWifiChange(wifiSsid, wifiPassword);
+      // Fallback timeout: Jika Orange Pi tidak merespon dalam 30 detik
+      setTimeout(() => {
+        setIsWifiConnecting((prev) => {
+          if (prev) {
+            setWifiStatus((status) => ({
+              ...status,
+              wifiError: "Tidak ada respon dari Orange Pi. Pastikan script python bridge di Orange Pi sedang berjalan.",
+            }));
+            return false;
+          }
+          return prev;
+        });
+      }, 30000);
+    } catch (err) {
+      console.error("Failed to connect WiFi:", err);
+      setIsWifiConnecting(false);
+    }
+  };
 
   const handleAutoModeChange = async (checked: boolean) => {
     await setAutoMode(checked);
@@ -171,7 +271,7 @@ export function ControlsSection({
                       className="text-emerald-700 border-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-700/60 text-[10px] gap-1 px-2 py-0.5"
                     >
                       <Wifi className="w-2.5 h-2.5" />
-                      Firebase
+                      Tersambung
                     </Badge>
                   ) : (
                     <Badge
@@ -250,6 +350,141 @@ export function ControlsSection({
               })}
             </div>
           </div>
+        </Card>
+
+        {/* WiFi Settings Card */}
+        <Card className="p-5 sm:p-6 bg-card border border-border/60 overflow-hidden relative">
+          <div 
+            className="flex items-center justify-between cursor-pointer select-none min-h-[44px]"
+            onClick={() => setIsWifiSettingsOpen(!isWifiSettingsOpen)}
+          >
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-xl bg-primary/10 text-primary">
+                <Wifi className="w-4 h-4" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-foreground">
+                  Pengaturan WiFi
+                </h3>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  {wifiStatus.wifiStatus ? `Status: ${wifiStatus.wifiStatus}` : "Hubungkan Orange Pi ke WiFi baru"}
+                </p>
+              </div>
+            </div>
+            <button className="text-muted-foreground hover:text-foreground transition-colors p-1">
+              {isWifiSettingsOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </button>
+          </div>
+
+          {isWifiSettingsOpen && (
+            <form onSubmit={handleConnectWifi} className="mt-5 space-y-4 animate-in slide-in-from-top-2 duration-200">
+              {wifiStatus.wifiError && (
+                <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-xs leading-relaxed flex items-start gap-2">
+                  <WifiOff className="w-4 h-4 shrink-0 mt-0.5" />
+                  <span>{wifiStatus.wifiError}</span>
+                </div>
+              )}
+
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-bold text-foreground/80 tracking-wide uppercase">
+                      Pilih Jaringan WiFi
+                    </label>
+                    <button
+                      type="button"
+                      onClick={handleScanWifi}
+                      disabled={isScanning || isWifiConnecting}
+                      className="text-[10px] text-primary hover:text-primary/80 transition-colors font-semibold flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                    >
+                      <RefreshCw className={cn("w-3 h-3", isScanning && "animate-spin")} />
+                      <span>{isScanning ? "Memindai..." : "Scan Ulang"}</span>
+                    </button>
+                  </div>
+                  
+                  <Select
+                    value={selectedSsid}
+                    onValueChange={handleSelectWifi}
+                    disabled={isWifiConnecting}
+                  >
+                    <SelectTrigger className="w-full h-11 rounded-xl bg-transparent border-input pl-3.5">
+                      <SelectValue placeholder={detectedWifis.length > 0 ? "Pilih WiFi terdeteksi..." : "Tidak ada WiFi terdeteksi..."} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {detectedWifis.map((ssid) => (
+                        <SelectItem key={ssid} value={ssid}>
+                          {ssid}
+                        </SelectItem>
+                      ))}
+                      <SelectItem value="MANUAL">
+                        Tulis manual / Hidden SSID...
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {(isManualSsid || detectedWifis.length === 0) && (
+                  <div className="space-y-1.5 animate-in slide-in-from-top-1 duration-150">
+                    <label className="text-[11px] font-bold text-foreground/80 tracking-wide uppercase">
+                      SSID / Nama WiFi (Manual)
+                    </label>
+                    <div className="relative">
+                      <Signal className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/60" />
+                      <Input
+                        type="text"
+                        placeholder="Nama jaringan WiFi..."
+                        value={wifiSsid}
+                        onChange={(e) => setWifiSsid(e.target.value)}
+                        disabled={isWifiConnecting}
+                        className="pl-10 h-11 rounded-xl"
+                        required
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold text-foreground/80 tracking-wide uppercase">
+                    Password / Kata Sandi
+                  </label>
+                  <div className="relative">
+                    <LockKeyhole className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/60" />
+                    <Input
+                      type={showPassword ? "text" : "password"}
+                      placeholder="Password WiFi..."
+                      value={wifiPassword}
+                      onChange={(e) => setWifiPassword(e.target.value)}
+                      disabled={isWifiConnecting}
+                      className="pl-10 pr-10 h-11 rounded-xl"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      disabled={isWifiConnecting}
+                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground/60 hover:text-foreground transition-colors p-1"
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isWifiConnecting || !wifiSsid.trim()}
+                className="w-full h-11 rounded-xl bg-primary hover:bg-primary/90 text-white font-bold text-sm shadow-md shadow-primary/20 hover:shadow-lg hover:shadow-primary/25 transition-all duration-200 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
+              >
+                {isWifiConnecting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Menghubungkan...</span>
+                  </>
+                ) : (
+                  <span>Hubungkan</span>
+                )}
+              </button>
+            </form>
+          )}
         </Card>
       </div>
 

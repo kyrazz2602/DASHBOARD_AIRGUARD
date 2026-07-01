@@ -17,10 +17,7 @@ import {
   BatteryMedium,
   BatteryFull,
   // Icons added for premium UI/UX:
-  Clock,
-  ShieldCheck,
   AlertOctagon,
-  Activity,
   AlertTriangle,
   Calendar,
   HelpCircle
@@ -359,7 +356,7 @@ export function MaintenanceWidget({
                     mlStatusConfig.styles,
                   )}
                 >
-                  {selectedModel === "decision_tree" ? "DT" : "RF"}: {mlStatusConfig.label}
+                  Prediksi: {mlStatusConfig.label}
                   <HelpCircle className="w-3 h-3 ml-0.5 opacity-70" />
                 </span>
               </TooltipTrigger>
@@ -409,17 +406,7 @@ export function MaintenanceWidget({
             </div>
           )}
 
-          {isMLAvailable && confidence !== null && (
-            <div className="flex justify-between items-center text-[11px] text-muted-foreground bg-muted/20 dark:bg-slate-900/30 p-2.5 rounded-xl border border-border/50 dark:border-white/5">
-              <div className="flex items-center gap-1.5">
-                <ShieldCheck className="w-3.5 h-3.5 text-indigo-500" />
-                <span>Keyakinan AI (Akurasi)</span>
-              </div>
-              <span className="font-bold text-foreground text-xs tabular-nums">
-                {(confidence * 100).toFixed(0)}%
-              </span>
-            </div>
-          )}
+
 
           {/* Error notification */}
           {error && (
@@ -525,68 +512,6 @@ export function MaintenanceWidget({
             </div>
           )}
         </div>
-
-        {/* ── ML Regression Stats ── */}
-        {isMLAvailable && !isPredicting && predictedRulHours !== null && filterIntegrityPercent !== null && (
-          <>
-            <div className="h-px bg-border/60 dark:bg-white/5 -mx-5 sm:-mx-6" />
-            <div className="flex flex-col sm:grid sm:grid-cols-2 gap-3">
-              {/* RUL Card */}
-              <div className="flex items-center gap-2.5 p-3 rounded-xl bg-gradient-to-br from-blue-500/5 to-transparent border border-blue-500/15 hover:border-blue-500/30 hover:-translate-y-0.5 transition-all duration-300 shadow-sm min-w-0">
-                <div className="p-1.5 rounded-lg bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-500/15 shrink-0">
-                  <Clock className="w-3.5 h-3.5" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1.5">
-                    <p className="text-[11px] font-bold text-muted-foreground tracking-[0.08em] truncate">
-                      Umur Filter Tersisa
-                    </p>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <button type="button" className="text-muted-foreground hover:text-foreground cursor-help focus:outline-hidden shrink-0">
-                          <HelpCircle className="w-3 h-3" />
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent side="top" className="max-w-xs text-xs">
-                        Remaining Useful Life (RUL): Perkiraan sisa waktu pemakaian filter dalam satuan hari sebelum perlu diganti.
-                      </TooltipContent>
-                    </Tooltip>
-                  </div>
-                  <p className="text-[13px] font-extrabold text-foreground mt-0.5 tabular-nums leading-tight truncate">
-                    {Math.round(predictedRulHours / 24)} hari
-                  </p>
-                </div>
-              </div>
-
-              {/* Integrity Card */}
-              <div className="flex items-center gap-2.5 p-3 rounded-xl bg-gradient-to-br from-teal-500/5 to-transparent border border-teal-500/15 hover:border-teal-500/30 hover:-translate-y-0.5 transition-all duration-300 shadow-sm min-w-0">
-                <div className="p-1.5 rounded-lg bg-teal-50 dark:bg-teal-950/30 text-teal-600 dark:text-teal-400 border border-teal-100 dark:border-teal-500/15 shrink-0">
-                  <Activity className="w-3.5 h-3.5" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1.5">
-                    <p className="text-[11px] font-bold text-muted-foreground tracking-[0.08em] truncate">
-                      Integritas Filter
-                    </p>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <button type="button" className="text-muted-foreground hover:text-foreground cursor-help focus:outline-hidden shrink-0">
-                          <HelpCircle className="w-3 h-3" />
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent side="top" className="max-w-xs text-xs">
-                        Persentase kebersihan dan efisiensi penyaringan filter saat ini berdasarkan prediksi model kecerdasan buatan.
-                      </TooltipContent>
-                    </Tooltip>
-                  </div>
-                  <p className="text-[13px] font-extrabold text-foreground mt-0.5 tabular-nums leading-tight truncate">
-                    {filterIntegrityPercent.toFixed(1)}%
-                  </p>
-                </div>
-              </div>
-            </div>
-          </>
-        )}
       </Card>
     </div>
   );

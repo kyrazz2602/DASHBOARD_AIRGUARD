@@ -17,7 +17,7 @@ const anySensorFeatures = fc.record<SensorFeatures>({
 
 // ---------------------------------------------------------------------------
 // Arbitrary: generates SensorFeatures that trigger "Bahaya"
-// (at least one threshold exceeded: pm25 > 125.4 OR pm10 > 354 OR co > 50 OR voc > 100)
+// (at least one threshold exceeded: pm25 > 125.4 OR pm10 > 354 OR co > 50 OR voc > 1.0)
 // ---------------------------------------------------------------------------
 const gantiFeaturesArb = fc.oneof(
   // pm25 > 125.4
@@ -25,7 +25,7 @@ const gantiFeaturesArb = fc.oneof(
     pm25: fc.double({ min: 125.401, max: 1000, noNaN: true }),
     pm10: fc.double({ min: 0, max: 354, noNaN: true }),
     co: fc.double({ min: 0, max: 50, noNaN: true }),
-    voc: fc.double({ min: 0, max: 100, noNaN: true }),
+    voc: fc.double({ min: 0, max: 1.0, noNaN: true }),
     suhu: fc.double({ min: 0, max: 50, noNaN: true }),
   }),
   // pm10 > 354
@@ -33,7 +33,7 @@ const gantiFeaturesArb = fc.oneof(
     pm25: fc.double({ min: 0, max: 125.4, noNaN: true }),
     pm10: fc.double({ min: 354.001, max: 2000, noNaN: true }),
     co: fc.double({ min: 0, max: 50, noNaN: true }),
-    voc: fc.double({ min: 0, max: 100, noNaN: true }),
+    voc: fc.double({ min: 0, max: 1.0, noNaN: true }),
     suhu: fc.double({ min: 0, max: 50, noNaN: true }),
   }),
   // co > 50
@@ -41,15 +41,15 @@ const gantiFeaturesArb = fc.oneof(
     pm25: fc.double({ min: 0, max: 125.4, noNaN: true }),
     pm10: fc.double({ min: 0, max: 354, noNaN: true }),
     co: fc.double({ min: 50.001, max: 1000, noNaN: true }),
-    voc: fc.double({ min: 0, max: 100, noNaN: true }),
+    voc: fc.double({ min: 0, max: 1.0, noNaN: true }),
     suhu: fc.double({ min: 0, max: 50, noNaN: true }),
   }),
-  // voc > 100
+  // voc > 1.0
   fc.record<SensorFeatures>({
     pm25: fc.double({ min: 0, max: 125.4, noNaN: true }),
     pm10: fc.double({ min: 0, max: 354, noNaN: true }),
     co: fc.double({ min: 0, max: 50, noNaN: true }),
-    voc: fc.double({ min: 100.001, max: 1000, noNaN: true }),
+    voc: fc.double({ min: 1.001, max: 50.0, noNaN: true }),
     suhu: fc.double({ min: 0, max: 50, noNaN: true }),
   }),
 );
@@ -64,7 +64,7 @@ const perhatianFeaturesArb = fc.oneof(
     pm25: fc.double({ min: 35.401, max: 125.4, noNaN: true }),
     pm10: fc.double({ min: 0, max: 154, noNaN: true }),
     co: fc.double({ min: 0, max: 15, noNaN: true }),
-    voc: fc.double({ min: 0, max: 20, noNaN: true }),
+    voc: fc.double({ min: 0, max: 0.299, noNaN: true }),
     suhu: fc.double({ min: 0, max: 50, noNaN: true }),
   }),
   // pm10 in (154, 354]
@@ -72,7 +72,7 @@ const perhatianFeaturesArb = fc.oneof(
     pm25: fc.double({ min: 0, max: 35.4, noNaN: true }),
     pm10: fc.double({ min: 154.001, max: 354, noNaN: true }),
     co: fc.double({ min: 0, max: 15, noNaN: true }),
-    voc: fc.double({ min: 0, max: 20, noNaN: true }),
+    voc: fc.double({ min: 0, max: 0.299, noNaN: true }),
     suhu: fc.double({ min: 0, max: 50, noNaN: true }),
   }),
   // co in (15, 50]
@@ -80,15 +80,15 @@ const perhatianFeaturesArb = fc.oneof(
     pm25: fc.double({ min: 0, max: 35.4, noNaN: true }),
     pm10: fc.double({ min: 0, max: 154, noNaN: true }),
     co: fc.double({ min: 15.001, max: 50, noNaN: true }),
-    voc: fc.double({ min: 0, max: 20, noNaN: true }),
+    voc: fc.double({ min: 0, max: 0.299, noNaN: true }),
     suhu: fc.double({ min: 0, max: 50, noNaN: true }),
   }),
-  // voc in (20, 100]
+  // voc in [0.3, 1.0]
   fc.record<SensorFeatures>({
     pm25: fc.double({ min: 0, max: 35.4, noNaN: true }),
     pm10: fc.double({ min: 0, max: 154, noNaN: true }),
     co: fc.double({ min: 0, max: 15, noNaN: true }),
-    voc: fc.double({ min: 20.001, max: 100, noNaN: true }),
+    voc: fc.double({ min: 0.3, max: 1.0, noNaN: true }),
     suhu: fc.double({ min: 0, max: 50, noNaN: true }),
   }),
 );
@@ -101,7 +101,7 @@ const amanFeaturesArb = fc.record<SensorFeatures>({
   pm25: fc.double({ min: 0, max: 35.4, noNaN: true }),
   pm10: fc.double({ min: 0, max: 154, noNaN: true }),
   co: fc.double({ min: 0, max: 15, noNaN: true }),
-  voc: fc.double({ min: 0, max: 20, noNaN: true }),
+  voc: fc.double({ min: 0, max: 0.299, noNaN: true }),
   suhu: fc.double({ min: 0, max: 50, noNaN: true }),
 });
 
@@ -148,7 +148,7 @@ describe("Property 4: Rule-Based Fallback Always Returns Valid Status", () => {
 // Validates: Requirements 7.2, 7.3, 7.4
 // ===========================================================================
 describe("Property 5: Rule-Based Threshold Consistency", () => {
-  it('returns "Bahaya" when pm25 > 125.4 OR pm10 > 354 OR co > 50 OR voc > 100', () => {
+  it('returns "Bahaya" when pm25 > 125.4 OR pm10 > 354 OR co > 50 OR voc > 1.0', () => {
     fc.assert(
       fc.property(gantiFeaturesArb, (features) => {
         expect(getRuleBasedStatus(features)).toBe("Bahaya");
@@ -173,23 +173,23 @@ describe("Property 5: Rule-Based Threshold Consistency", () => {
   });
 
   // Boundary: exact threshold values should NOT trigger the higher status
-  it('returns "Aman" for exact boundary values (pm25=35.4, pm10=154, co=15, voc=20)', () => {
+  it('returns "Aman" for exact boundary values (pm25=35.4, pm10=154, co=15, voc=0.29)', () => {
     const boundary: SensorFeatures = {
       pm25: 35.4,
       pm10: 154,
       co: 15,
-      voc: 20,
+      voc: 0.29,
       suhu: 25,
     };
     expect(getRuleBasedStatus(boundary)).toBe("Aman");
   });
 
-  it('returns "Perhatian" for exact Bahaya boundary values (pm25=125.4, pm10=354, co=50, voc=100)', () => {
+  it('returns "Perhatian" for exact Bahaya boundary values (pm25=125.4, pm10=354, co=50, voc=1.0)', () => {
     const boundary: SensorFeatures = {
       pm25: 125.4,
       pm10: 354,
       co: 50,
-      voc: 100,
+      voc: 1.0,
       suhu: 25,
     };
     expect(getRuleBasedStatus(boundary)).toBe("Perhatian");

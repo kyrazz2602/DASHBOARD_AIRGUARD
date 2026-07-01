@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { MapPin, X, Navigation, RefreshCw, Wifi, WifiOff, Radio } from "lucide-react";
+import { MapPin, X, Navigation, RefreshCw, Wifi, WifiOff, Radio, Save } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { sendNavGoal, setNavigationMode, listenToDeviceStatus } from "@/lib/firebase-data";
+import { sendNavGoal, setNavigationMode, listenToDeviceStatus, triggerSaveMap } from "@/lib/firebase-data";
 
 const C = {
   bg: "#0B0E14",
@@ -12,6 +12,227 @@ const C = {
   neon: "#00F2FF",
   redNeon: "#FF0055",
 } as const;
+
+// Persistent ROS singleton state to survive modal mount/unmount lifecycles
+interface RosState {
+  ros: any;
+  connStatus: "disconnected" | "connecting" | "connected";
+  bounds: { minX: number; maxX: number; minY: number; maxY: number };
+  pose: { x: number; y: number; yaw: number } | null;
+  scans: { x: number; y: number }[];
+  path: { x: number; y: number }[];
+  offscreenCanvas: HTMLCanvasElement | null;
+  goalPub: any;
+  mapSub: any;
+  odomSub: any;
+  scanSub: any;
+  planSub: any;
+  listeners: Set<() => void>;
+}
+
+const rosState: RosState = {
+  ros: null,
+  connStatus: "disconnected",
+  bounds: { minX: -12.0, maxX: 12.0, minY: -12.0, maxY: 12.0 },
+  pose: null,
+  scans: [],
+  path: [],
+  offscreenCanvas: null,
+  goalPub: null,
+  mapSub: null,
+  odomSub: null,
+  scanSub: null,
+  planSub: null,
+  listeners: new Set(),
+};
+
+const disconnectRosGlobal = () => {
+  if (rosState.mapSub) {
+    try { rosState.mapSub.unsubscribe(); } catch (e) {}
+    rosState.mapSub = null;
+  }
+  if (rosState.odomSub) {
+    try { rosState.odomSub.unsubscribe(); } catch (e) {}
+    rosState.odomSub = null;
+  }
+  if (rosState.scanSub) {
+    try { rosState.scanSub.unsubscribe(); } catch (e) {}
+    rosState.scanSub = null;
+  }
+  if (rosState.planSub) {
+    try { rosState.planSub.unsubscribe(); } catch (e) {}
+    rosState.planSub = null;
+  }
+  if (rosState.ros) {
+    try { rosState.ros.close(); } catch (e) {}
+    rosState.ros = null;
+  }
+
+  rosState.goalPub = null;
+  rosState.pose = null;
+  rosState.scans = [];
+  rosState.path = [];
+  rosState.offscreenCanvas = null;
+  rosState.bounds = { minX: -12.0, maxX: 12.0, minY: -12.0, maxY: 12.0 };
+  rosState.connStatus = "disconnected";
+
+  rosState.listeners.forEach((listener) => listener());
+};
+
+const connectRosGlobal = async (wsUrl: string) => {
+  if (rosState.connStatus !== "disconnected") return;
+  rosState.connStatus = "connecting";
+  rosState.listeners.forEach((listener) => listener());
+
+  try {
+    const ROSLIB = (await import("roslib")) as any;
+    const ros = new ROSLIB.Ros({ url: wsUrl });
+
+    ros.on("connection", () => {
+      console.log("[ROSBridge] Connected to WebSocket.");
+      rosState.ros = ros;
+      rosState.connStatus = "connected";
+
+      // Goal Publisher
+      rosState.goalPub = new ROSLIB.Topic({
+        ros: ros,
+        name: "/goal_pose",
+        messageType: "geometry_msgs/PoseStamped",
+      });
+
+      // Map Grid Subscriber
+      rosState.mapSub = new ROSLIB.Topic({
+        ros: ros,
+        name: "/map",
+        messageType: "nav_msgs/msg/OccupancyGrid",
+      });
+      rosState.mapSub.subscribe((message: any) => {
+        const { width, height, resolution, origin } = message.info;
+        const minX = origin.position.x;
+        const maxX = minX + width * resolution;
+        const minY = origin.position.y;
+        const maxY = minY + height * resolution;
+        
+        rosState.bounds = { minX, maxX, minY, maxY };
+
+        // Render map on offscreen canvas
+        if (!rosState.offscreenCanvas) {
+          rosState.offscreenCanvas = document.createElement("canvas");
+        }
+        const offCanvas = rosState.offscreenCanvas;
+        offCanvas.width = width;
+        offCanvas.height = height;
+        const ctx = offCanvas.getContext("2d");
+        if (ctx) {
+          const imgData = ctx.createImageData(width, height);
+          for (let i = 0; i < message.data.length; i++) {
+            const val = message.data[i];
+            const col = i % width;
+            const row = Math.floor(i / width);
+            const flippedRow = height - 1 - row;
+            const destIndex = (flippedRow * width + col) * 4;
+
+            if (val === -1) {
+              imgData.data[destIndex] = 21;
+              imgData.data[destIndex + 1] = 28;
+              imgData.data[destIndex + 2] = 38;
+              imgData.data[destIndex + 3] = 255;
+            } else if (val >= 50) {
+              imgData.data[destIndex] = 56;
+              imgData.data[destIndex + 1] = 189;
+              imgData.data[destIndex + 2] = 248;
+              imgData.data[destIndex + 3] = 255;
+            } else {
+              imgData.data[destIndex] = 11;
+              imgData.data[destIndex + 1] = 14;
+              imgData.data[destIndex + 2] = 20;
+              imgData.data[destIndex + 3] = 255;
+            }
+          }
+          ctx.putImageData(imgData, 0, 0);
+        }
+        rosState.listeners.forEach((listener) => listener());
+      });
+
+      // Robot Odometry Subscriber
+      rosState.odomSub = new ROSLIB.Topic({
+        ros: ros,
+        name: "/odom",
+        messageType: "nav_msgs/msg/Odometry",
+      });
+      rosState.odomSub.subscribe((message: any) => {
+        const pos = message.pose.pose.position;
+        const ori = message.pose.pose.orientation;
+
+        // Quaternion to Yaw
+        const siny_cosp = 2.0 * (ori.w * ori.z + ori.x * ori.y);
+        const cosy_cosp = 1.0 - 2.0 * (ori.y * ori.y + ori.z * ori.z);
+        const yaw = Math.atan2(siny_cosp, cosy_cosp);
+
+        rosState.pose = { x: pos.x, y: pos.y, yaw: yaw };
+        rosState.listeners.forEach((listener) => listener());
+      });
+
+      // LiDAR Scanner Subscriber
+      rosState.scanSub = new ROSLIB.Topic({
+        ros: ros,
+        name: "/scan",
+        messageType: "sensor_msgs/msg/LaserScan",
+      });
+      rosState.scanSub.subscribe((message: any) => {
+        const { angle_min, angle_increment, range_min, range_max, ranges } = message;
+        const currentPose = rosState.pose;
+        if (!currentPose) return;
+
+        const points: { x: number; y: number }[] = [];
+        for (let i = 0; i < ranges.length; i++) {
+          const dist = ranges[i];
+          if (dist >= range_min && dist <= range_max) {
+            const angle = angle_min + i * angle_increment;
+            const localX = dist * Math.cos(angle);
+            const localY = dist * Math.sin(angle);
+            const mapX = currentPose.x + localX * Math.cos(currentPose.yaw) - localY * Math.sin(currentPose.yaw);
+            const mapY = currentPose.y + localX * Math.sin(currentPose.yaw) + localY * Math.cos(currentPose.yaw);
+            points.push({ x: mapX, y: mapY });
+          }
+        }
+        rosState.scans = points;
+        rosState.listeners.forEach((listener) => listener());
+      });
+
+      // Path / Route Planning Subscriber
+      rosState.planSub = new ROSLIB.Topic({
+        ros: ros,
+        name: "/plan",
+        messageType: "nav_msgs/msg/Path",
+      });
+      rosState.planSub.subscribe((message: any) => {
+        const points = message.poses.map((p: any) => ({
+          x: p.pose.position.x,
+          y: p.pose.position.y,
+        }));
+        rosState.path = points;
+        rosState.listeners.forEach((listener) => listener());
+      });
+
+      rosState.listeners.forEach((listener) => listener());
+    });
+
+    ros.on("error", (err: any) => {
+      console.error("[ROSBridge] WebSocket Error:", err);
+      disconnectRosGlobal();
+    });
+
+    ros.on("close", () => {
+      console.log("[ROSBridge] Connection closed.");
+      disconnectRosGlobal();
+    });
+  } catch (err) {
+    console.error("[ROSBridge] Setup Error:", err);
+    rosState.connStatus = "disconnected";
+    rosState.listeners.forEach((listener) => listener());
+  }
+};
 
 interface MapPlanningModalProps {
   isOpen: boolean;
@@ -29,6 +250,26 @@ export function MapPlanningModal({ isOpen, onClose, onSwitchToManual }: MapPlann
   // States for manual input synchronization
   const [inputX, setInputX] = useState("");
   const [inputY, setInputY] = useState("");
+
+  // Map saving status states
+  const [deviceStatus, setDeviceStatus] = useState<any>(null);
+  const [isSavingMap, setIsSavingMap] = useState(false);
+  const [saveMapStatus, setSaveMapStatus] = useState<"idle" | "success" | "error">("idle");
+
+  const handleSaveMap = async () => {
+    setIsSavingMap(true);
+    setSaveMapStatus("idle");
+    try {
+      await triggerSaveMap();
+      setSaveMapStatus("success");
+      setTimeout(() => setSaveMapStatus("idle"), 4000);
+    } catch (err) {
+      console.error("[MapPlanning] Failed to save map:", err);
+      setSaveMapStatus("error");
+    } finally {
+      setIsSavingMap(false);
+    }
+  };
 
   // Sync selectedPoint to input fields
   useEffect(() => {
@@ -85,8 +326,8 @@ export function MapPlanningModal({ isOpen, onClose, onSwitchToManual }: MapPlann
   
   // ROS Connection State
   const [wsUrl, setWsUrl] = useState("ws://192.168.1.10:9090");
-  const [connStatus, setConnStatus] = useState<"disconnected" | "connecting" | "connected">("disconnected");
-  const [bounds, setBounds] = useState({ minX: -5.0, maxX: 5.0, minY: -5.0, maxY: 5.0 });
+  const [connStatus, setConnStatus] = useState<"disconnected" | "connecting" | "connected">(rosState.connStatus);
+  const [bounds, setBounds] = useState(rosState.bounds);
 
   // Canvas and Draw State Refs
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -114,195 +355,44 @@ export function MapPlanningModal({ isOpen, onClose, onSwitchToManual }: MapPlann
     selectedPointRef.current = selectedPoint;
   }, [selectedPoint]);
 
-  // WebSocket Connection Handlers
-  const disconnectRos = () => {
-    if (mapSubRef.current) {
-      try { mapSubRef.current.unsubscribe(); } catch (e) {}
-      mapSubRef.current = null;
-    }
-    if (odomSubRef.current) {
-      try { odomSubRef.current.unsubscribe(); } catch (e) {}
-      odomSubRef.current = null;
-    }
-    if (scanSubRef.current) {
-      try { scanSubRef.current.unsubscribe(); } catch (e) {}
-      scanSubRef.current = null;
-    }
-    if (planSubRef.current) {
-      try { planSubRef.current.unsubscribe(); } catch (e) {}
-      planSubRef.current = null;
-    }
-    if (rosInstanceRef.current) {
-      try { rosInstanceRef.current.close(); } catch (e) {}
-      rosInstanceRef.current = null;
-    }
+  // Sync local state and refs with global ROS singleton
+  useEffect(() => {
+    const handleUpdate = () => {
+      setConnStatus(rosState.connStatus);
+      setBounds(rosState.bounds);
 
-    goalPubRef.current = null;
-    poseRef.current = null;
-    scansRef.current = [];
-    pathRef.current = [];
-    offscreenCanvasRef.current = null;
-    
-    setBounds({ minX: -5.0, maxX: 5.0, minY: -5.0, maxY: 5.0 });
-    setConnStatus("disconnected");
+      // Sync refs for canvas draw cycle
+      boundsRef.current = rosState.bounds;
+      poseRef.current = rosState.pose;
+      scansRef.current = rosState.scans;
+      pathRef.current = rosState.path;
+      offscreenCanvasRef.current = rosState.offscreenCanvas;
+      rosInstanceRef.current = rosState.ros;
+      goalPubRef.current = rosState.goalPub;
+    };
+
+    rosState.listeners.add(handleUpdate);
+    handleUpdate(); // Initial sync
+
+    return () => {
+      rosState.listeners.delete(handleUpdate);
+    };
+  }, [isOpen]);
+
+  const disconnectRos = () => {
+    disconnectRosGlobal();
   };
 
-  const connectRos = async () => {
-    if (connStatus !== "disconnected") return;
-    setConnStatus("connecting");
-
-    try {
-      const ROSLIB = (await import("roslib")) as any;
-      const ros = new ROSLIB.Ros({ url: wsUrl });
-
-      ros.on("connection", () => {
-        console.log("[ROSBridge] Connected to WebSocket.");
-        rosInstanceRef.current = ros;
-        setConnStatus("connected");
-
-        // Goal Publisher
-        goalPubRef.current = new ROSLIB.Topic({
-          ros: ros,
-          name: "/goal_pose",
-          messageType: "geometry_msgs/PoseStamped",
-        });
-
-        // Map Grid Subscriber
-        mapSubRef.current = new ROSLIB.Topic({
-          ros: ros,
-          name: "/map",
-          messageType: "nav_msgs/msg/OccupancyGrid",
-        });
-        mapSubRef.current.subscribe((message: any) => {
-          const { width, height, resolution, origin } = message.info;
-          const minX = origin.position.x;
-          const maxX = minX + width * resolution;
-          const minY = origin.position.y;
-          const maxY = minY + height * resolution;
-          
-          setBounds({ minX, maxX, minY, maxY });
-
-          // Render map on offscreen canvas
-          if (!offscreenCanvasRef.current) {
-            offscreenCanvasRef.current = document.createElement("canvas");
-          }
-          const offCanvas = offscreenCanvasRef.current;
-          offCanvas.width = width;
-          offCanvas.height = height;
-          const ctx = offCanvas.getContext("2d");
-          if (ctx) {
-            const imgData = ctx.createImageData(width, height);
-            for (let i = 0; i < message.data.length; i++) {
-              const val = message.data[i];
-              const col = i % width;
-              const row = Math.floor(i / width);
-              const flippedRow = height - 1 - row;
-              const destIndex = (flippedRow * width + col) * 4;
-
-              if (val === -1) {
-                // Unknown space: Sleek dark grey/blue
-                imgData.data[destIndex] = 21;
-                imgData.data[destIndex + 1] = 28;
-                imgData.data[destIndex + 2] = 38;
-                imgData.data[destIndex + 3] = 255;
-              } else if (val >= 50) {
-                // Occupied space (Obstacles): Neon cyan
-                imgData.data[destIndex] = 56;
-                imgData.data[destIndex + 1] = 189;
-                imgData.data[destIndex + 2] = 248;
-                imgData.data[destIndex + 3] = 255;
-              } else {
-                // Free space: Dark background matching dashboard
-                imgData.data[destIndex] = 11;
-                imgData.data[destIndex + 1] = 14;
-                imgData.data[destIndex + 2] = 20;
-                imgData.data[destIndex + 3] = 255;
-              }
-            }
-            ctx.putImageData(imgData, 0, 0);
-          }
-        });
-
-        // Robot Odometry Subscriber
-        odomSubRef.current = new ROSLIB.Topic({
-          ros: ros,
-          name: "/odom",
-          messageType: "nav_msgs/msg/Odometry",
-        });
-        odomSubRef.current.subscribe((message: any) => {
-          const pos = message.pose.pose.position;
-          const ori = message.pose.pose.orientation;
-
-          // Quaternion to Yaw
-          const siny_cosp = 2.0 * (ori.w * ori.z + ori.x * ori.y);
-          const cosy_cosp = 1.0 - 2.0 * (ori.y * ori.y + ori.z * ori.z);
-          const yaw = Math.atan2(siny_cosp, cosy_cosp);
-
-          poseRef.current = { x: pos.x, y: pos.y, yaw: yaw };
-        });
-
-        // LiDAR Scanner Subscriber
-        scanSubRef.current = new ROSLIB.Topic({
-          ros: ros,
-          name: "/scan",
-          messageType: "sensor_msgs/msg/LaserScan",
-        });
-        scanSubRef.current.subscribe((message: any) => {
-          const { angle_min, angle_increment, range_min, range_max, ranges } = message;
-          const currentPose = poseRef.current;
-          if (!currentPose) return;
-
-          const points: { x: number; y: number }[] = [];
-          for (let i = 0; i < ranges.length; i++) {
-            const dist = ranges[i];
-            if (dist >= range_min && dist <= range_max) {
-              const angle = angle_min + i * angle_increment;
-              const localX = dist * Math.cos(angle);
-              const localY = dist * Math.sin(angle);
-              const mapX = currentPose.x + localX * Math.cos(currentPose.yaw) - localY * Math.sin(currentPose.yaw);
-              const mapY = currentPose.y + localX * Math.sin(currentPose.yaw) + localY * Math.cos(currentPose.yaw);
-              points.push({ x: mapX, y: mapY });
-            }
-          }
-          scansRef.current = points;
-        });
-
-        // Path / Route Planning Subscriber
-        planSubRef.current = new ROSLIB.Topic({
-          ros: ros,
-          name: "/plan",
-          messageType: "nav_msgs/msg/Path",
-        });
-        planSubRef.current.subscribe((message: any) => {
-          const points = message.poses.map((p: any) => ({
-            x: p.pose.position.x,
-            y: p.pose.position.y,
-          }));
-          pathRef.current = points;
-        });
-      });
-
-      ros.on("error", (err: any) => {
-        console.error("[ROSBridge] WebSocket Error:", err);
-        disconnectRos();
-      });
-
-      ros.on("close", () => {
-        console.log("[ROSBridge] Connection closed.");
-        disconnectRos();
-      });
-    } catch (err) {
-      console.error("[ROSBridge] Setup Error:", err);
-      setConnStatus("disconnected");
-    }
+  const connectRos = () => {
+    connectRosGlobal(wsUrl);
   };
 
   const handleToggleConnect = () => {
     if (connStatus === "disconnected") {
       localStorage.setItem("rosbridge_ws_url", wsUrl);
-      connectRos();
+      connectRosGlobal(wsUrl);
     } else {
-      disconnectRos();
+      disconnectRosGlobal();
     }
   };
 
@@ -310,6 +400,7 @@ export function MapPlanningModal({ isOpen, onClose, onSwitchToManual }: MapPlann
   useEffect(() => {
     const unsubscribeStatus = listenToDeviceStatus(
       (status) => {
+        setDeviceStatus(status);
         // Fallback to Firebase status values if not connected via websocket
         if (connStatus !== "connected" || !poseRef.current) {
           if (status.x !== undefined && status.y !== undefined && status.yaw !== undefined) {
@@ -347,15 +438,28 @@ export function MapPlanningModal({ isOpen, onClose, onSwitchToManual }: MapPlann
         return;
       }
 
+      // Resize canvas drawing buffer to match its actual display size if needed
+      if (canvas.width !== canvas.clientWidth || canvas.height !== canvas.clientHeight) {
+        canvas.width = canvas.clientWidth;
+        canvas.height = canvas.clientHeight;
+      }
+
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       const b = boundsRef.current;
 
+      const mapW = b.maxX - b.minX;
+      const mapH = b.maxY - b.minY;
+      const centerX = (b.maxX + b.minX) / 2;
+      const centerY = (b.maxY + b.minY) / 2;
+
+      const scale = Math.min(canvas.width / mapW, canvas.height / mapH);
+      const offsetX = canvas.width / 2;
+      const offsetY = canvas.height / 2;
+
       const mapToCanvas = (mx: number, my: number) => {
-        const pctX = (mx - b.minX) / (b.maxX - b.minX);
-        const pctY = (my - b.minY) / (b.maxY - b.minY);
         return {
-          x: pctX * canvas.width,
-          y: (1 - pctY) * canvas.height,
+          x: offsetX + (mx - centerX) * scale,
+          y: offsetY - (my - centerY) * scale,
         };
       };
 
@@ -363,100 +467,121 @@ export function MapPlanningModal({ isOpen, onClose, onSwitchToManual }: MapPlann
       if (offscreenCanvasRef.current) {
         ctx.save();
         ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(offscreenCanvasRef.current, 0, 0, canvas.width, canvas.height);
+        const topLeft = mapToCanvas(b.minX, b.maxY);
+        const bottomRight = mapToCanvas(b.maxX, b.minY);
+        const w = bottomRight.x - topLeft.x;
+        const h = bottomRight.y - topLeft.y;
+        ctx.drawImage(offscreenCanvasRef.current, topLeft.x, topLeft.y, w, h);
         ctx.restore();
-
-        // Subtle tech grid lines
-        ctx.strokeStyle = "rgba(0, 242, 255, 0.03)";
-        ctx.lineWidth = 1;
-        const gridCount = 20;
-        for (let i = 0; i <= gridCount; i++) {
-          ctx.beginPath();
-          ctx.moveTo((i / gridCount) * canvas.width, 0);
-          ctx.lineTo((i / gridCount) * canvas.width, canvas.height);
-          ctx.stroke();
-
-          ctx.beginPath();
-          ctx.moveTo(0, (i / gridCount) * canvas.height);
-          ctx.lineTo(canvas.width, (i / gridCount) * canvas.height);
-          ctx.stroke();
-        }
       } else {
-        // Fallback: Default Dark space with grid lines
+        // Fallback: Default Dark space
         ctx.fillStyle = C.bg;
         ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-        ctx.strokeStyle = "rgba(0, 242, 255, 0.05)";
-        ctx.lineWidth = 1;
-        const gridCount = 10;
-        for (let i = 0; i <= gridCount; i++) {
-          ctx.beginPath();
-          ctx.moveTo((i / gridCount) * canvas.width, 0);
-          ctx.lineTo((i / gridCount) * canvas.width, canvas.height);
-          ctx.stroke();
-
-          ctx.beginPath();
-          ctx.moveTo(0, (i / gridCount) * canvas.height);
-          ctx.lineTo(canvas.width, (i / gridCount) * canvas.height);
-          ctx.stroke();
-        }
-
-        // Main Axis Crosshair lines
-        ctx.strokeStyle = "rgba(148, 163, 184, 0.25)";
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.moveTo(canvas.width / 2, 0);
-        ctx.lineTo(canvas.width / 2, canvas.height);
-        ctx.stroke();
-
-        ctx.beginPath();
-        ctx.moveTo(0, canvas.height / 2);
-        ctx.lineTo(canvas.width, canvas.height / 2);
-        ctx.stroke();
       }
 
-      // Draw minor grid lines and labels every 1 meter for distance reference
+      // 2. Draw Coordinate-based Grid Lines (Dashed, subtle neon cyan)
+      const rangeX = b.maxX - b.minX;
+      const gridStep = rangeX > 40 ? 5 : (rangeX > 15 ? 2 : 1);
+
       ctx.save();
-      ctx.font = "bold 9px monospace";
-      ctx.fillStyle = "rgba(148, 163, 184, 0.7)";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
+      ctx.setLineDash([4, 6]);
+      ctx.strokeStyle = "rgba(0, 242, 255, 0.18)";
+      ctx.lineWidth = 1.2;
 
-      // Vertical grids (constant x) and labels
-      for (let x = Math.ceil(b.minX); x <= Math.floor(b.maxX); x++) {
+      // Vertical Grid Lines (Constant X)
+      for (let x = Math.ceil(b.minX / gridStep) * gridStep; x <= Math.floor(b.maxX / gridStep) * gridStep; x += gridStep) {
         if (x === 0) continue;
-        const ptCanvas = mapToCanvas(x, 0);
-        
-        ctx.strokeStyle = "rgba(0, 242, 255, 0.08)";
-        ctx.lineWidth = 0.5;
+        const pt = mapToCanvas(x, 0);
         ctx.beginPath();
-        ctx.moveTo(ptCanvas.x, 0);
-        ctx.lineTo(ptCanvas.x, canvas.height);
+        ctx.moveTo(pt.x, 0);
+        ctx.lineTo(pt.x, canvas.height);
         ctx.stroke();
-
-        // Draw distance tag on bottom border of grid
-        ctx.fillText(`${x > 0 ? "+" : ""}${x}m`, ptCanvas.x, canvas.height - 18);
       }
 
-      // Horizontal grids (constant y) and labels
-      ctx.textAlign = "left";
-      for (let y = Math.ceil(b.minY); y <= Math.floor(b.maxY); y++) {
+      // Horizontal Grid Lines (Constant Y)
+      for (let y = Math.ceil(b.minY / gridStep) * gridStep; y <= Math.floor(b.maxY / gridStep) * gridStep; y += gridStep) {
         if (y === 0) continue;
-        const ptCanvas = mapToCanvas(0, y);
-
-        ctx.strokeStyle = "rgba(0, 242, 255, 0.08)";
-        ctx.lineWidth = 0.5;
+        const pt = mapToCanvas(0, y);
         ctx.beginPath();
-        ctx.moveTo(0, ptCanvas.y);
-        ctx.lineTo(canvas.width, ptCanvas.y);
+        ctx.moveTo(0, pt.y);
+        ctx.lineTo(canvas.width, pt.y);
         ctx.stroke();
-
-        // Draw distance tag on left border of grid
-        ctx.fillText(`${y > 0 ? "+" : ""}${y}m`, 8, ptCanvas.y);
       }
       ctx.restore();
 
-      // 2. Draw origin axis (0,0) in standard RGB ROS axes colors (X = Red, Y = Green)
+      // 3. Draw Axis Lines crossing at Origin (0,0) (subtle RGB style: Y = green, X = red)
+      const origin = mapToCanvas(0, 0);
+      ctx.save();
+      ctx.lineWidth = 2.0;
+
+      // Y-Axis (Green, X = 0)
+      if (origin.x >= 0 && origin.x <= canvas.width) {
+        ctx.strokeStyle = "rgba(16, 185, 129, 0.6)";
+        ctx.beginPath();
+        ctx.moveTo(origin.x, 0);
+        ctx.lineTo(origin.x, canvas.height);
+        ctx.stroke();
+      }
+
+      // X-Axis (Red, Y = 0)
+      if (origin.y >= 0 && origin.y <= canvas.height) {
+        ctx.strokeStyle = "rgba(255, 0, 85, 0.6)";
+        ctx.beginPath();
+        ctx.moveTo(0, origin.y);
+        ctx.lineTo(canvas.width, origin.y);
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      // 4. Draw Grid Distance Labels with Sleek Background Pills
+      ctx.save();
+      ctx.font = "bold 9px monospace";
+      ctx.textBaseline = "middle";
+
+      // Vertical Grid Labels (X) - drawn near bottom edge
+      ctx.textAlign = "center";
+      for (let x = Math.ceil(b.minX / gridStep) * gridStep; x <= Math.floor(b.maxX / gridStep) * gridStep; x += gridStep) {
+        if (x === 0) continue;
+        const pt = mapToCanvas(x, 0);
+        if (pt.x < 20 || pt.x > canvas.width - 20) continue; // Skip edge overflow
+        
+        const labelText = `${x > 0 ? "+" : ""}${x}m`;
+        const textWidth = ctx.measureText(labelText).width;
+        
+        // Draw pill background
+        ctx.fillStyle = "rgba(11, 14, 20, 0.85)";
+        ctx.beginPath();
+        ctx.roundRect(pt.x - textWidth / 2 - 4, canvas.height - 24, textWidth + 8, 14, 4);
+        ctx.fill();
+        
+        // Draw neon text
+        ctx.fillStyle = "rgba(0, 242, 255, 0.7)";
+        ctx.fillText(labelText, pt.x, canvas.height - 17);
+      }
+
+      // Horizontal Grid Labels (Y) - drawn near left edge
+      ctx.textAlign = "left";
+      for (let y = Math.ceil(b.minY / gridStep) * gridStep; y <= Math.floor(b.maxY / gridStep) * gridStep; y += gridStep) {
+        if (y === 0) continue;
+        const pt = mapToCanvas(0, y);
+        if (pt.y < 20 || pt.y > canvas.height - 20) continue; // Skip edge overflow
+        
+        const labelText = `${y > 0 ? "+" : ""}${y}m`;
+        const textWidth = ctx.measureText(labelText).width;
+        
+        // Draw pill background
+        ctx.fillStyle = "rgba(11, 14, 20, 0.85)";
+        ctx.beginPath();
+        ctx.roundRect(6, pt.y - 7, textWidth + 8, 14, 4);
+        ctx.fill();
+        
+        // Draw neon text
+        ctx.fillStyle = "rgba(0, 242, 255, 0.7)";
+        ctx.fillText(labelText, 10, pt.y);
+      }
+      ctx.restore();
+
+      // 5. Draw origin axis (0,0) in standard RGB ROS axes colors (X = Red, Y = Green)
       const originCanvas = mapToCanvas(0, 0);
       if (originCanvas.x >= 0 && originCanvas.x <= canvas.width && originCanvas.y >= 0 && originCanvas.y <= canvas.height) {
         ctx.save();
@@ -481,6 +606,28 @@ export function MapPlanningModal({ isOpen, onClose, onSwitchToManual }: MapPlann
         ctx.beginPath();
         ctx.arc(originCanvas.x, originCanvas.y, 2.5, 0, Math.PI * 2);
         ctx.fill();
+        ctx.restore();
+      }
+
+      // 6. Draw LiDAR Radar Sweep line animation
+      const pose = poseRef.current;
+      if (pose) {
+        const cPose = mapToCanvas(pose.x, pose.y);
+        ctx.save();
+        ctx.strokeStyle = "rgba(0, 242, 255, 0.05)";
+        ctx.lineWidth = 1.5;
+        // Sweeping line matching time increment
+        const angle = (Date.now() / 1200) % (Math.PI * 2);
+        ctx.beginPath();
+        ctx.moveTo(cPose.x, cPose.y);
+        ctx.lineTo(cPose.x + Math.cos(angle) * (12 * scale), cPose.y + Math.sin(angle) * (12 * scale));
+        ctx.stroke();
+        
+        // Sweep outer ring indicator
+        ctx.strokeStyle = "rgba(0, 242, 255, 0.02)";
+        ctx.beginPath();
+        ctx.arc(cPose.x, cPose.y, 12 * scale, 0, Math.PI * 2);
+        ctx.stroke();
         ctx.restore();
       }
 
@@ -523,7 +670,6 @@ export function MapPlanningModal({ isOpen, onClose, onSwitchToManual }: MapPlann
       }
 
       // 5. Draw Robot Pose (Triangle with heading & glow ring)
-      const pose = poseRef.current;
       if (pose) {
         const cPose = mapToCanvas(pose.x, pose.y);
 
@@ -615,13 +761,9 @@ export function MapPlanningModal({ isOpen, onClose, onSwitchToManual }: MapPlann
         setIsInstructionsOpen(false);
       }
     } else {
-      disconnectRos();
       setSelectedPoint(null);
       setSentStatus("idle");
     }
-    return () => {
-      disconnectRos();
-    };
   }, [isOpen]);
 
   if (!isOpen) return null;
@@ -630,15 +772,21 @@ export function MapPlanningModal({ isOpen, onClose, onSwitchToManual }: MapPlann
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
-    const clickX = e.clientX - rect.left;
-    const clickY = e.clientY - rect.top;
-
-    const pctX = clickX / rect.width;
-    const pctY = clickY / rect.height;
+    const clickX = (e.clientX - rect.left) * (canvas.width / rect.width);
+    const clickY = (e.clientY - rect.top) * (canvas.height / rect.height);
 
     const b = boundsRef.current;
-    const xMeters = b.minX + pctX * (b.maxX - b.minX);
-    const yMeters = b.maxY - pctY * (b.maxY - b.minY);
+    const mapW = b.maxX - b.minX;
+    const mapH = b.maxY - b.minY;
+    const centerX = (b.maxX + b.minX) / 2;
+    const centerY = (b.maxY + b.minY) / 2;
+
+    const scale = Math.min(canvas.width / mapW, canvas.height / mapH);
+    const offsetX = canvas.width / 2;
+    const offsetY = canvas.height / 2;
+
+    const xMeters = centerX + (clickX - offsetX) / scale;
+    const yMeters = centerY - (clickY - offsetY) / scale;
 
     setSelectedPoint({
       x: Math.round(xMeters * 100) / 100,
@@ -746,7 +894,7 @@ export function MapPlanningModal({ isOpen, onClose, onSwitchToManual }: MapPlann
       <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
         {/* Interactive Grid Map */}
         <div className="flex-1 w-full min-h-[35vh] lg:min-h-0 relative flex items-center justify-center p-4 lg:p-6 select-none bg-slate-950/20">
-          <div className="relative w-full max-w-[400px] lg:max-w-[480px] aspect-square rounded-2xl border border-slate-800 bg-black/40 overflow-hidden shadow-2xl">
+          <div className="relative w-full h-full rounded-2xl border border-slate-800 bg-black/40 overflow-hidden shadow-2xl">
             {/* HTML5 Map Canvas */}
             <canvas
               ref={canvasRef}
@@ -798,7 +946,7 @@ export function MapPlanningModal({ isOpen, onClose, onSwitchToManual }: MapPlann
 
         {/* Sidebar Info Panel */}
         <div
-          className="p-4 lg:px-5 lg:py-6 flex flex-col justify-between gap-4 lg:gap-6 shrink-0 lg:w-80 border-t lg:border-t-0 lg:border-l overflow-hidden"
+          className="p-4 lg:px-5 lg:py-6 flex flex-col justify-between gap-4 lg:gap-6 shrink-0 lg:w-100 border-t lg:border-t-0 lg:border-l overflow-hidden"
           style={{ background: C.bgAlt, borderColor: `${C.neon}18` }}
         >
           <div className="flex-1 min-h-0 space-y-4 overflow-y-auto pr-1">
@@ -906,6 +1054,70 @@ export function MapPlanningModal({ isOpen, onClose, onSwitchToManual }: MapPlann
                     </div>
                   </div>
                 </div>
+              </div>
+
+              {/* Map Saving Status & Control Card */}
+              <div className="p-3.5 lg:p-4 rounded-xl bg-slate-950/70 border border-slate-800/60 backdrop-blur-sm shadow-xl shadow-black/10 space-y-2.5 transition-all hover:border-cyan-500/30">
+                <div className="flex justify-between items-center text-[10px] lg:text-xs">
+                  <span className="text-slate-300 font-semibold flex items-center gap-1.5">
+                    <Save className="w-3.5 h-3.5 text-cyan-400" />
+                    Penyimpanan Peta
+                  </span>
+                  <span className={cn(
+                    "text-[8px] lg:text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider border",
+                    deviceStatus?.map_auto_save_status === "SUCCESS" && "bg-emerald-950/60 text-emerald-300 border-emerald-500/50 shadow-[0_0_10px_rgba(16,185,129,0.15)]",
+                    deviceStatus?.map_auto_save_status === "FAILED" && "bg-red-950/60 text-red-300 border-red-500/50 shadow-[0_0_10px_rgba(239,68,68,0.15)]",
+                    isSavingMap && "bg-amber-950/60 text-amber-300 border-amber-500/50 animate-pulse shadow-[0_0_10px_rgba(245,158,11,0.15)]",
+                    !deviceStatus?.map_auto_save_status && "bg-slate-900 text-slate-400 border-slate-700/60"
+                  )}>
+                    {isSavingMap ? "MENYIMPAN" : (deviceStatus?.map_auto_save_status || "AKTIF")}
+                  </span>
+                </div>
+                
+                <div className="text-[9px] text-slate-400 font-mono space-y-1">
+                  <div className="flex justify-between">
+                    <span>Auto-Save (30s):</span>
+                    <span className="text-cyan-400 font-bold">AKTIF</span>
+                  </div>
+                  {deviceStatus?.map_last_saved && (
+                    <div className="flex justify-between gap-1 overflow-hidden">
+                      <span>Terakhir Disimpan:</span>
+                      <span className="text-slate-300 text-right truncate">
+                        {new Date(deviceStatus.map_last_saved).toLocaleTimeString()}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleSaveMap}
+                  disabled={isSavingMap}
+                  className="w-full py-2 px-3 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 hover:shadow-[0_0_10px_rgba(6,182,212,0.15)] border border-cyan-500/30 hover:border-cyan-500/50 text-cyan-300 text-[10px] font-bold uppercase cursor-pointer transition-all flex items-center justify-center gap-1.5"
+                >
+                  {isSavingMap ? (
+                    <>
+                      <RefreshCw className="w-3 h-3 animate-spin" />
+                      Menyimpan...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-3.5 h-3.5" />
+                      Simpan Peta Sekarang
+                    </>
+                  )}
+                </button>
+
+                {saveMapStatus === "success" && (
+                  <div className="text-[9px] text-emerald-400 text-center font-bold font-mono">
+                    ✓ Perintah Simpan Terkirim!
+                  </div>
+                )}
+                {saveMapStatus === "error" && (
+                  <div className="text-[9px] text-red-400 text-center font-bold font-mono">
+                    ✗ Gagal mengirim perintah simpan.
+                  </div>
+                )}
               </div>
             </div>
 

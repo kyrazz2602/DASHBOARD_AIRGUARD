@@ -139,7 +139,7 @@ export function SensorCard({
             styles.value,
           )}
         >
-          {value.toFixed(1)}
+          {value.toFixed(2)}
         </span>
         <span className="text-[13px] text-muted-foreground opacity-70 ml-1 font-semibold select-none shrink-0 w-fit">
           {unit}
