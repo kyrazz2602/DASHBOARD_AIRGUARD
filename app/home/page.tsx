@@ -127,11 +127,11 @@ export default function HomePage() {
               <span className="absolute bottom-4 right-4 w-1.5 h-1.5 rounded-full bg-primary/40" />
 
               {/* Device image */}
-              <div className="relative z-10 transition-transform duration-700 group-hover:scale-105 group-hover:-translate-y-1 drop-shadow-2xl">
+              <div className="relative z-10 w-full h-full flex items-center justify-center transition-transform duration-700 group-hover:scale-105 group-hover:-translate-y-1 drop-shadow-2xl">
                 <img
-                  src="/images/design-mode/Cover.png"
+                  src="/images/design-mode/Gemini_Generated_Image.png"
                   alt="AirGuard Device"
-                  className="w-full h-auto rounded-xl object-cover"
+                  className="w-full h-full max-h-[280px] rounded-2xl object-cover border border-white/10 shadow-lg shadow-black/25"
                   onError={(e) => {
                     const target = e.currentTarget;
                     target.style.display = "none";
@@ -644,9 +644,11 @@ export default function HomePage() {
           <div className="grid md:grid-cols-4 gap-12 mb-12">
             <div className="col-span-1 md:col-span-1">
               <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 bg-gradient-to-br from-primary to-primary/60 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-primary/20">
-                  AG
-                </div>
+                <img
+                  src="/Gemini_Generated_Image.png"
+                  alt="AirGuard Logo"
+                  className="w-10 h-10 rounded-xl object-cover shadow-lg shadow-primary/20"
+                />
                 <span className="text-xl font-bold text-foreground">
                   AIRGUARD
                 </span>

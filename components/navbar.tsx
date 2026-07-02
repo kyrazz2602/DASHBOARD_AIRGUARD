@@ -188,9 +188,11 @@ export function Navbar({ alerts }: NavbarProps = {}) {
           <div className="flex items-center justify-between h-16">
             {/* --- LOGO --- */}
             <Link href="/home" className="flex items-center gap-3 group">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center text-primary-foreground font-bold text-sm shadow-lg shadow-primary/20 group-hover:scale-105 transition-transform">
-                AG
-              </div>
+              <img
+                src="/Gemini_Generated_Image.png"
+                alt="AirGuard Logo"
+                className="w-9 h-9 rounded-xl object-cover shadow-lg shadow-primary/20 group-hover:scale-105 transition-transform"
+              />
               <h1 className="text-xl font-bold text-foreground tracking-tight group-hover:text-primary transition-colors">
                 AIRGUARD
               </h1>
