@@ -692,13 +692,10 @@ export function MapPlanningModal({ isOpen, onClose, onSwitchToManual }: MapPlann
     };
   }, []);
 
-  // Set autonomous mode and load cached ws URL on modal open
+  // Load cached ws URL on modal open (do NOT force navigation mode here —
+  // the user may be mapping via manual remote control and just viewing the map)
   useEffect(() => {
     if (isOpen) {
-      setNavigationMode(true).catch((err) => {
-        console.error("[MapPlanning] Failed to set autonomous navigation mode:", err);
-      });
-      
       if (typeof window !== "undefined") {
         const savedUrl = localStorage.getItem("rosbridge_ws_url");
         if (savedUrl) {
@@ -747,6 +744,9 @@ export function MapPlanningModal({ isOpen, onClose, onSwitchToManual }: MapPlann
     setIsSending(true);
     setSentStatus("idle");
     try {
+      // Explicitly switch to autonomous mode ONLY when user sends a nav goal
+      await setNavigationMode(true);
+
       // Send target coordinates to Firebase -> bridge reads -> Nav2 Action Client
       // This is the ONLY correct path for Nav2 A* path planning.
       // The bridge uses NavigateToPose action interface which properly triggers

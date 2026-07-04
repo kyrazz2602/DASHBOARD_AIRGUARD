@@ -26,6 +26,14 @@ Di Firebase Console → Realtime Database → Rules:
     "LiDAR": {
       ".read": "auth != null",
       ".write": "auth != null"
+    },
+    "Map": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "robot": {
+      ".read": "auth != null",
+      ".write": "auth != null"
     }
   }
 }
@@ -141,16 +149,65 @@ Key adalah Unix timestamp dalam milidetik. Data digunakan untuk grafik 3d / 7d.
 
 ---
 
+### `/Map` — Data peta real-time dari SLAM (ditulis Orange Pi bridge)
+
+```json
+{
+  "Map": {
+    "grid": {
+      "width": 100,
+      "height": 100,
+      "resolution": 0.2,
+      "origin_x": -10.0,
+      "origin_y": -10.0,
+      "data_b64": "<base64 encoded occupancy data>",
+      "timestamp": "2026-07-04T22:00:00Z"
+    },
+    "scan_points": {
+      "points": [
+        { "x": 1.2, "y": 0.5 },
+        { "x": 1.3, "y": 0.6 }
+      ],
+      "timestamp": "2026-07-04T22:00:00Z"
+    },
+    "path": {
+      "points": [
+        { "x": 0.0, "y": 0.0 },
+        { "x": 1.0, "y": 1.0 }
+      ],
+      "timestamp": "2026-07-04T22:00:00Z"
+    },
+    "robot_pose": {
+      "x": 0.5,
+      "y": 0.3,
+      "yaw": 1.57,
+      "timestamp": "2026-07-04T22:00:00Z"
+    }
+  }
+}
+```
+
+| Path              | Keterangan                                           |
+| ----------------- | ---------------------------------------------------- |
+| `grid`            | Occupancy grid (downsampled, base64)                 |
+| `scan_points`     | Titik-titik LiDAR yang ditransformasi ke map frame   |
+| `path`            | Jalur A* yang direncanakan Nav2                      |
+| `robot_pose`      | Posisi dan orientasi robot dalam map frame            |
+
+---
+
 ## 3. Alur Data
 
 ```
-Arduino ──writes──▶ /Udara      (sensor readings)
-Arduino ──writes──▶ /Status     (actual device state)
+Arduino    ──writes──▶ /Udara      (sensor readings)
+Arduino    ──writes──▶ /Status     (actual device state)
+Orange Pi  ──writes──▶ /Map        (grid, scan_points, path, robot_pose)
 
-App     ──writes──▶ /Command    (fan speed, gerak, auto mode)
-App     ──reads──▶  /Udara      (display sensor cards & chart)
-App     ──reads──▶  /Status     (display actual device state)
-App     ──reads──▶  /Command    (sync fan control UI)
+App        ──writes──▶ /Command    (fan speed, gerak, auto mode, nav goal)
+App        ──reads───▶ /Udara      (display sensor cards & chart)
+App        ──reads───▶ /Status     (display actual device state)
+App        ──reads───▶ /Command    (sync fan control UI)
+App        ──reads───▶ /Map        (real-time map visualization)
 ```
 
 ---
