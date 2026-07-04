@@ -92,6 +92,7 @@ export function ControlsSection({
 }: ControlsSectionProps) {
   const [isRemoteOpen, setIsRemoteOpen] = useState(false);
   const [isMapOpen, setIsMapOpen] = useState(false);
+
   const recommendedSpeed = detectRecommendedFanSpeed(sensorData);
 
   const {
