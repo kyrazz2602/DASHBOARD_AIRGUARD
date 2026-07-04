@@ -59,7 +59,12 @@ export default function SignupPage() {
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-secondary/10 flex items-center justify-center px-4 font-sans">
       <div className="w-full max-w-md animate-in fade-in zoom-in duration-500 slide-in-from-bottom-4 my-8">
         {/* Header Section */}
-        <div className="text-center mb-8">
+        <div className="flex flex-col items-center text-center mb-8">
+          <img
+            src="/Gemini_Generated_Image.png"
+            alt="AirGuard Logo"
+            className="w-16 h-16 rounded-2xl object-cover shadow-lg shadow-primary/20 mb-4 animate-[float_6s_ease-in-out_infinite]"
+          />
           <h1 className="text-3xl font-bold tracking-tight mb-2 text-primary">
             AIRGUARD
           </h1>

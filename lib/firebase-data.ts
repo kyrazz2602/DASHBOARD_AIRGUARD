@@ -39,6 +39,45 @@ export interface LidarData {
   jarak_terdekat_cm: number;  // Jarak hambatan terdekat dalam centimeter
 }
 
+/**
+ * Data grid peta occupancy (downsampled) dari SLAM Toolbox via Firebase
+ */
+export interface MapGridData {
+  width: number;          // Lebar grid (pixels, downsampled)
+  height: number;         // Tinggi grid (pixels, downsampled)
+  resolution: number;     // Resolusi grid (meter per pixel, downsampled)
+  origin_x: number;       // Origin X peta (meter)
+  origin_y: number;       // Origin Y peta (meter)
+  data_b64: string;       // Base64 encoded occupancy data (0=unknown, 128+val, -1→127)
+  timestamp: string;
+}
+
+/**
+ * Titik-titik scan LiDAR yang sudah ditransformasi ke map frame
+ */
+export interface ScanPointsData {
+  points: { x: number; y: number }[];  // Array titik scan dalam meter
+  timestamp: string;
+}
+
+/**
+ * Jalur A* yang direncanakan oleh Nav2
+ */
+export interface MapPathData {
+  points: { x: number; y: number }[];  // Array titik path dalam meter
+  timestamp: string;
+}
+
+/**
+ * Posisi dan orientasi robot dalam map frame
+ */
+export interface RobotPose {
+  x: number;    // Posisi X (meter)
+  y: number;    // Posisi Y (meter)
+  yaw: number;  // Heading (radian)
+  timestamp: string;
+}
+
 // ============================================================================
 // 2. DATABASE PATHS & HELPER
 // ============================================================================
@@ -48,6 +87,10 @@ const STATUS_PATH = "Status";
 const COMMAND_PATH = "Command";
 const LIDAR_PATH = "LiDAR/latest";
 const HISTORY_PATH = "history";
+const MAP_GRID_PATH = "Map/grid";
+const MAP_SCAN_PATH = "Map/scan_points";
+const MAP_PATH_PATH = "Map/path";
+const MAP_POSE_PATH = "Map/robot_pose";
 
 /**
  * Memastikan Firebase database terinisialisasi sebelum melakukan operasi
@@ -262,6 +305,168 @@ export function listenToLidarData(
   return () => off(lidarRef, "value", listener);
 }
 
+/**
+ * Mendengarkan data grid peta occupancy secara real-time dari /Map/grid
+ * Grid di-downsample dan di-encode base64 oleh bridge untuk bandwidth efficiency
+ * 
+ * @param callback Fungsi handler ketika data grid baru diterima
+ * @param onError Fungsi handler opsional ketika terjadi error
+ * @returns Fungsi unsubscribe untuk membersihkan listener
+ */
+export function listenToMapGrid(
+  callback: (data: MapGridData) => void,
+  onError?: (error: Error) => void,
+): () => void {
+  if (!isDbReady()) {
+    console.warn("[listenToMapGrid] Firebase Database not initialized.");
+    return () => {};
+  }
+  const gridRef = ref(database, MAP_GRID_PATH);
+
+  const listener = onValue(
+    gridRef,
+    (snapshot: DataSnapshot) => {
+      const data = snapshot.val();
+      if (data && data.data_b64) {
+        callback({
+          width: Number(data.width) || 0,
+          height: Number(data.height) || 0,
+          resolution: Number(data.resolution) || 0.2,
+          origin_x: Number(data.origin_x) || 0,
+          origin_y: Number(data.origin_y) || 0,
+          data_b64: String(data.data_b64),
+          timestamp: String(data.timestamp || ""),
+        });
+      }
+    },
+    (error: Error) => {
+      console.error("[listenToMapGrid] Firebase error:", error);
+      if (onError) onError(error);
+    },
+  );
+
+  return () => off(gridRef, "value", listener);
+}
+
+/**
+ * Mendengarkan titik-titik scan LiDAR secara real-time dari /Map/scan_points
+ * 
+ * @param callback Fungsi handler ketika data scan baru diterima
+ * @param onError Fungsi handler opsional ketika terjadi error
+ * @returns Fungsi unsubscribe untuk membersihkan listener
+ */
+export function listenToScanPoints(
+  callback: (data: ScanPointsData) => void,
+  onError?: (error: Error) => void,
+): () => void {
+  if (!isDbReady()) {
+    console.warn("[listenToScanPoints] Firebase Database not initialized.");
+    return () => {};
+  }
+  const scanRef = ref(database, MAP_SCAN_PATH);
+
+  const listener = onValue(
+    scanRef,
+    (snapshot: DataSnapshot) => {
+      const data = snapshot.val();
+      if (data && data.points) {
+        const points = Array.isArray(data.points)
+          ? data.points.map((p: any) => ({ x: Number(p.x) || 0, y: Number(p.y) || 0 }))
+          : [];
+        callback({
+          points,
+          timestamp: String(data.timestamp || ""),
+        });
+      }
+    },
+    (error: Error) => {
+      console.error("[listenToScanPoints] Firebase error:", error);
+      if (onError) onError(error);
+    },
+  );
+
+  return () => off(scanRef, "value", listener);
+}
+
+/**
+ * Mendengarkan jalur A* yang direncanakan Nav2 secara real-time dari /Map/path
+ * 
+ * @param callback Fungsi handler ketika data path baru diterima
+ * @param onError Fungsi handler opsional ketika terjadi error
+ * @returns Fungsi unsubscribe untuk membersihkan listener
+ */
+export function listenToMapPath(
+  callback: (data: MapPathData) => void,
+  onError?: (error: Error) => void,
+): () => void {
+  if (!isDbReady()) {
+    console.warn("[listenToMapPath] Firebase Database not initialized.");
+    return () => {};
+  }
+  const pathRef = ref(database, MAP_PATH_PATH);
+
+  const listener = onValue(
+    pathRef,
+    (snapshot: DataSnapshot) => {
+      const data = snapshot.val();
+      if (data && data.points) {
+        const points = Array.isArray(data.points)
+          ? data.points.map((p: any) => ({ x: Number(p.x) || 0, y: Number(p.y) || 0 }))
+          : [];
+        callback({
+          points,
+          timestamp: String(data.timestamp || ""),
+        });
+      }
+    },
+    (error: Error) => {
+      console.error("[listenToMapPath] Firebase error:", error);
+      if (onError) onError(error);
+    },
+  );
+
+  return () => off(pathRef, "value", listener);
+}
+
+/**
+ * Mendengarkan posisi dan orientasi robot secara real-time dari /Map/robot_pose
+ * 
+ * @param callback Fungsi handler ketika pose baru diterima
+ * @param onError Fungsi handler opsional ketika terjadi error
+ * @returns Fungsi unsubscribe untuk membersihkan listener
+ */
+export function listenToRobotPose(
+  callback: (pose: RobotPose) => void,
+  onError?: (error: Error) => void,
+): () => void {
+  if (!isDbReady()) {
+    console.warn("[listenToRobotPose] Firebase Database not initialized.");
+    return () => {};
+  }
+  const poseRef = ref(database, MAP_POSE_PATH);
+
+  const listener = onValue(
+    poseRef,
+    (snapshot: DataSnapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        callback({
+          x: Number(data.x) || 0,
+          y: Number(data.y) || 0,
+          yaw: Number(data.yaw) || 0,
+          timestamp: String(data.timestamp || ""),
+        });
+      }
+    },
+    (error: Error) => {
+      console.error("[listenToRobotPose] Firebase error:", error);
+      if (onError) onError(error);
+    },
+  );
+
+  return () => off(poseRef, "value", listener);
+}
+
 // ============================================================================
 // 4. DATA WRITER & ACTIONS (COMMANDS)
 // ============================================================================
@@ -443,111 +648,3 @@ export async function getHistoricalData(
     );
   });
 }
-
-/**
- * Mengirim perintah simpan peta ke /Command/save_map di Firebase
- */
-export async function triggerSaveMap(): Promise<void> {
-  if (!isDbReady()) {
-    console.warn("[triggerSaveMap] Firebase Database not initialized.");
-    return;
-  }
-  const saveMapRef = ref(database, `${COMMAND_PATH}/save_map`);
-  await set(saveMapRef, true);
-}
-
-/**
- * Mengirim perintah koneksi WiFi baru ke /Command/wifi di Firebase
- */
-export async function triggerWifiChange(ssid: string, password: string): Promise<void> {
-  if (!isDbReady()) {
-    console.warn("[triggerWifiChange] Firebase Database not initialized.");
-    return;
-  }
-  const wifiRef = ref(database, `${COMMAND_PATH}/wifi`);
-  await set(wifiRef, {
-    ssid,
-    password,
-    trigger: true,
-    updatedAt: Date.now(),
-  });
-}
-
-/**
- * Mendengarkan status WiFi aktual dari /Status/wifi_status dan /Status/wifi_error di Firebase
- */
-export function listenToWifiStatus(
-  callback: (status: { wifiStatus: string; wifiError: string }) => void,
-  onError?: (error: Error) => void,
-): () => void {
-  if (!isDbReady()) {
-    console.warn("[listenToWifiStatus] Firebase Database not initialized.");
-    return () => {};
-  }
-  const statusRef = ref(database, STATUS_PATH);
-  const listener = onValue(
-    statusRef,
-    (snapshot: DataSnapshot) => {
-      const data = snapshot.val();
-      if (data) {
-        callback({
-          wifiStatus: (data.wifi_status as string) || "",
-          wifiError: (data.wifi_error as string) || "",
-        });
-      }
-    },
-    (error: Error) => {
-      console.error("[listenToWifiStatus] Firebase error:", error);
-      if (onError) onError(error);
-    },
-  );
-  return () => off(statusRef, "value", listener);
-}
-
-/**
- * Mendengarkan daftar SSID WiFi yang terdeteksi oleh Orange Pi dari /Status/detected_wifis
- */
-export function listenToDetectedWifis(
-  callback: (wifis: string[]) => void,
-  onError?: (error: Error) => void,
-): () => void {
-  if (!isDbReady()) {
-    console.warn("[listenToDetectedWifis] Firebase Database not initialized.");
-    return () => {};
-  }
-  const wifisRef = ref(database, `${STATUS_PATH}/detected_wifis`);
-  const listener = onValue(
-    wifisRef,
-    (snapshot: DataSnapshot) => {
-      const data = snapshot.val();
-      if (data && Array.isArray(data)) {
-        callback(data);
-      } else if (data && typeof data === "object") {
-        callback(Object.values(data) as string[]);
-      } else {
-        callback([]);
-      }
-    },
-    (error: Error) => {
-      console.error("[listenToDetectedWifis] Firebase error:", error);
-      if (onError) onError(error);
-    },
-  );
-  return () => off(wifisRef, "value", listener);
-}
-
-/**
- * Memicu Orange Pi untuk melakukan pemindaian WiFi baru
- */
-export async function triggerWifiScan(): Promise<void> {
-  if (!isDbReady()) {
-    console.warn("[triggerWifiScan] Firebase Database not initialized.");
-    return;
-  }
-  const scanTriggerRef = ref(database, `${COMMAND_PATH}/wifi`);
-  await update(scanTriggerRef, {
-    scan_trigger: true,
-  });
-}
-
-
