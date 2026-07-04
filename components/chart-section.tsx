@@ -749,17 +749,17 @@ export function ChartSection() {
       {/* ── Controls ── */}
       <div className="flex flex-col sm:flex-row gap-4 mb-5">
         {/* Sensor selector */}
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           <p className="text-[10px] font-bold text-muted-foreground mb-2 uppercase tracking-wider">
             Parameter Sensor
           </p>
-          <div className="flex gap-3 sm:gap-1.5 flex-wrap">
+          <div className="flex flex-wrap gap-2 sm:gap-1.5">
             {(Object.keys(SENSOR_CONFIG) as SensorType[]).map((s) => (
               <button
                 key={s}
                 onClick={() => setSelectedSensor(s)}
                 className={cn(
-                  "px-4 py-2.5 rounded-lg text-xs font-semibold border transition-all duration-200 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 sm:px-3 sm:py-1.5 flex items-center justify-center",
+                  "px-3 py-2 rounded-lg text-[11px] sm:text-xs font-semibold border transition-all duration-200 min-h-[40px] sm:min-h-0 sm:px-3 sm:py-1.5 flex items-center justify-center",
                   selectedSensor === s
                     ? "text-white border-transparent shadow-sm scale-105"
                     : "bg-muted/50 border-border text-muted-foreground hover:text-foreground hover:bg-muted",
@@ -780,7 +780,7 @@ export function ChartSection() {
 
           {/* Line Toggles for Combined Chart */}
           {selectedSensor === "all" && (
-            <div className="flex gap-3 sm:gap-2 flex-wrap items-center mt-3 p-1.5 bg-muted/30 border border-border/40 rounded-xl max-w-fit animate-in fade-in slide-in-from-top-1 duration-200">
+            <div className="flex flex-wrap gap-2 sm:gap-2 items-center mt-3 p-1.5 bg-muted/30 border border-border/40 rounded-xl max-w-fit animate-in fade-in slide-in-from-top-1 duration-200">
               <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest px-2">
                 Filter:
               </span>
@@ -808,7 +808,7 @@ export function ChartSection() {
                       }))
                     }
                     className={cn(
-                      "px-4 py-2.5 rounded-lg text-xs sm:text-[10px] font-bold flex items-center gap-1.5 border transition-all duration-150 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 sm:px-3 sm:py-1",
+                      "px-3 py-2 rounded-lg text-[11px] sm:text-[10px] font-bold flex items-center gap-1.5 border transition-all duration-150 min-h-[40px] sm:min-h-0 sm:px-3 sm:py-1",
                       active
                         ? "bg-card text-foreground shadow-xs"
                         : "bg-muted/10 border-dashed border-border/60 text-muted-foreground/50 hover:text-muted-foreground",
@@ -830,17 +830,17 @@ export function ChartSection() {
         </div>
 
         {/* Time range selector */}
-        <div className="sm:text-right">
+        <div className="sm:text-right shrink-0">
           <p className="text-[10px] font-bold text-muted-foreground mb-2 uppercase tracking-wider flex items-center gap-1 sm:justify-end">
             <Calendar className="w-3 h-3" /> Rentang Waktu
           </p>
-          <div className="flex gap-3 sm:gap-1.5 flex-wrap sm:justify-end">
+          <div className="flex flex-wrap gap-2 sm:gap-1.5 sm:justify-end">
             {(["1h", "3d", "7d"] as const).map((r) => (
               <button
                 key={r}
                 onClick={() => setTimeRange(r)}
                 className={cn(
-                  "px-4 py-2.5 rounded-lg text-xs font-semibold border transition-all duration-200 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 sm:px-3 sm:py-1.5 flex items-center justify-center",
+                  "px-3 py-2 rounded-lg text-[11px] sm:text-xs font-semibold border transition-all duration-200 min-h-[40px] sm:min-h-0 sm:px-3 sm:py-1.5 flex items-center justify-center",
                   timeRange === r
                     ? "border-primary/50 bg-primary/10 text-primary dark:text-primary"
                     : "bg-muted/50 border-border text-muted-foreground hover:text-foreground hover:bg-muted",
@@ -880,11 +880,22 @@ export function ChartSection() {
             </div>
           </div>
         ) : (
-          <ResponsiveContainer width="99%" height="100%">
+          <ResponsiveContainer 
+            key={`${timeRange}-${selectedSensor}`}
+            width="100%" 
+            height="100%"
+            minWidth={0}
+            minHeight={0}
+          >
           {selectedSensor === "all" ? (
             <LineChart
               data={chartData}
-              margin={{ top: 10, right: 10, left: 15, bottom: 10 }}
+              margin={{ 
+                top: 10, 
+                right: 10, 
+                left: isMobile ? -5 : 15, 
+                bottom: isMobile ? 25 : 20 
+              }}
             >
               <CartesianGrid
                 strokeDasharray="3 3"
@@ -902,7 +913,7 @@ export function ChartSection() {
                 }}
                 tickLine={false}
                 axisLine={false}
-                dy={8}
+                dy={6}
                 interval="preserveStartEnd"
                 minTickGap={isMobile ? 65 : 40}
               />
@@ -917,15 +928,17 @@ export function ChartSection() {
                 dx={-8}
                 domain={[0, "auto"]}
               >
-                <Label
-                  value="Konsentrasi (μg/m³ / ppm / mg/m³)"
-                  angle={-90}
-                  position="insideLeft"
-                  offset={-5}
-                  style={{ textAnchor: "middle" }}
-                  fill="var(--muted-foreground)"
-                  className="font-semibold text-[11px] select-none"
-                />
+                {!isMobile && (
+                  <Label
+                    value="Konsentrasi (μg/m³ / ppm / mg/m³)"
+                    angle={-90}
+                    position="insideLeft"
+                    offset={-5}
+                    style={{ textAnchor: "middle" }}
+                    fill="var(--muted-foreground)"
+                    className="font-semibold text-[11px] select-none"
+                  />
+                )}
               </YAxis>
 
               <ChartTooltip content={<CustomTooltip />} />
@@ -1059,7 +1072,12 @@ export function ChartSection() {
           ) : (
             <AreaChart
               data={chartData}
-              margin={{ top: 10, right: 10, left: 15, bottom: 10 }}
+              margin={{ 
+                top: 10, 
+                right: 10, 
+                left: isMobile ? -5 : 15, 
+                bottom: isMobile ? 25 : 20 
+              }}
             >
               <defs>
                 <linearGradient
@@ -1090,7 +1108,7 @@ export function ChartSection() {
                 }}
                 tickLine={false}
                 axisLine={false}
-                dy={8}
+                dy={6}
                 interval="preserveStartEnd"
                 minTickGap={isMobile ? 65 : 40}
               />
@@ -1105,15 +1123,17 @@ export function ChartSection() {
                 dx={-8}
                 domain={[config.min, "auto"]}
               >
-                <Label
-                  value={`Konsentrasi (${config.unit})`}
-                  angle={-90}
-                  position="insideLeft"
-                  offset={-5}
-                  style={{ textAnchor: "middle" }}
-                  fill="var(--muted-foreground)"
-                  className="font-semibold text-[11px] select-none"
-                />
+                {!isMobile && (
+                  <Label
+                    value={`Konsentrasi (${config.unit})`}
+                    angle={-90}
+                    position="insideLeft"
+                    offset={-5}
+                    style={{ textAnchor: "middle" }}
+                    fill="var(--muted-foreground)"
+                    className="font-semibold text-[11px] select-none"
+                  />
+                )}
               </YAxis>
 
               <ChartTooltip content={<CustomTooltip />} />

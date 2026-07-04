@@ -34,6 +34,10 @@ Di Firebase Console → Realtime Database → Rules:
     "robot": {
       ".read": "auth != null",
       ".write": "auth != null"
+    },
+    "SavedMaps": {
+      ".read": "auth != null",
+      ".write": "auth != null"
     }
   }
 }
@@ -113,6 +117,7 @@ Di Firebase Console → Realtime Database → Rules:
 | `gerak`           | string  | `MAJU` \| `MUNDUR` \| `KIRI` \| `KANAN` \| `DIAM` | Perintah arah gerak (dari Remote Control) |
 | `isAutoMode`      | boolean | `true` / `false`                                  | Mode otomatis aktif                       |
 | `filterStartDate` | number  | timestamp ms                                      | Tanggal reset filter terakhir             |
+| `map_action`      | object  | `{ action: "SAVE"\|"LOAD", mapName: string, status: "PENDING"\|"SUCCESS"\|"ERROR", timestamp: number }` | Perintah aksi penyimpanan/pemuatan peta |
 | `updatedAt`       | number  | timestamp ms                                      | Waktu update terakhir dari app            |
 
 **Mapping Remote Control → `/Command/gerak`:**
@@ -193,6 +198,37 @@ Key adalah Unix timestamp dalam milidetik. Data digunakan untuk grafik 3d / 7d.
 | `scan_points`     | Titik-titik LiDAR yang ditransformasi ke map frame   |
 | `path`            | Jalur A* yang direncanakan Nav2                      |
 | `robot_pose`      | Posisi dan orientasi robot dalam map frame            |
+
+---
+
+### `/SavedMaps` — Daftar peta yang disimpan
+
+```json
+{
+  "SavedMaps": {
+    "map_1708920000000": {
+      "id": "map_1708920000000",
+      "name": "Lantai 1 Rumah",
+      "timestamp": 1708920000000,
+      "grid": {
+        "width": 100,
+        "height": 100,
+        "resolution": 0.2,
+        "origin_x": -10.0,
+        "origin_y": -10.0,
+        "data_b64": "<base64 encoded occupancy data>"
+      }
+    }
+  }
+}
+```
+
+| Field       | Tipe   | Keterangan                                       |
+| ----------- | ------ | ------------------------------------------------ |
+| `id`        | string | ID unik peta (biasanya `map_[timestamp]`)       |
+| `name`      | string | Nama/label kustom dari pengguna                  |
+| `timestamp` | number | Waktu penyimpanan peta (ms)                      |
+| `grid`      | object | Snapshot data occupancy grid peta saat disimpan   |
 
 ---
 

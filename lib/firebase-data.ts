@@ -78,6 +78,26 @@ export interface RobotPose {
   timestamp: string;
 }
 
+/**
+ * Representasi data peta yang disimpan di database
+ */
+export interface SavedMap {
+  id: string;
+  name: string;
+  timestamp: number;
+  grid?: MapGridData;
+}
+
+/**
+ * Status aksi penyimpanan/pemuatan peta
+ */
+export interface MapActionState {
+  action: "SAVE" | "LOAD" | "IDLE";
+  mapName?: string;
+  status: "PENDING" | "SUCCESS" | "ERROR" | "IDLE";
+  timestamp?: number;
+}
+
 // ============================================================================
 // 2. DATABASE PATHS & HELPER
 // ============================================================================
@@ -91,6 +111,8 @@ const MAP_GRID_PATH = "Map/grid";
 const MAP_SCAN_PATH = "Map/scan_points";
 const MAP_PATH_PATH = "Map/path";
 const MAP_POSE_PATH = "Map/robot_pose";
+const SAVED_MAPS_PATH = "SavedMaps";
+const MAP_ACTION_PATH = "Command/map_action";
 
 /**
  * Memastikan Firebase database terinisialisasi sebelum melakukan operasi
@@ -742,3 +764,107 @@ export async function triggerWifiScan(): Promise<void> {
     scan_trigger: true,
   });
 }
+
+/**
+ * Memicu Orange Pi untuk melakukan penyimpanan (SAVE) atau pemuatan (LOAD) peta SLAM
+ */
+export async function triggerMapAction(action: "SAVE" | "LOAD", mapName: string): Promise<void> {
+  if (!isDbReady()) {
+    console.warn("[triggerMapAction] Firebase Database not initialized.");
+    return;
+  }
+  const actionRef = ref(database, MAP_ACTION_PATH);
+  await set(actionRef, {
+    action,
+    mapName,
+    status: "PENDING",
+    timestamp: Date.now(),
+  });
+}
+
+/**
+ * Mereset status aksi peta di Firebase kembali ke IDLE
+ */
+export async function resetMapAction(): Promise<void> {
+  if (!isDbReady()) return;
+  const actionRef = ref(database, MAP_ACTION_PATH);
+  await set(actionRef, {
+    action: "IDLE",
+    status: "IDLE",
+    timestamp: Date.now(),
+  });
+}
+
+/**
+ * Mendengarkan status aksi pemetaan saat ini secara real-time dari /Command/map_action
+ */
+export function listenToMapAction(
+  callback: (state: MapActionState) => void,
+  onError?: (error: Error) => void,
+): () => void {
+  if (!isDbReady()) {
+    console.warn("[listenToMapAction] Firebase Database not initialized.");
+    return () => {};
+  }
+  const actionRef = ref(database, MAP_ACTION_PATH);
+  const listener = onValue(
+    actionRef,
+    (snapshot: DataSnapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        callback({
+          action: data.action || "IDLE",
+          mapName: data.mapName,
+          status: data.status || "IDLE",
+          timestamp: data.timestamp,
+        });
+      } else {
+        callback({ action: "IDLE", status: "IDLE" });
+      }
+    },
+    (error: Error) => {
+      console.error("[listenToMapAction] Firebase error:", error);
+      if (onError) onError(error);
+    },
+  );
+  return () => off(actionRef, "value", listener);
+}
+
+/**
+ * Mendengarkan daftar peta tersimpan secara real-time dari /SavedMaps
+ */
+export function listenToSavedMaps(
+  callback: (maps: SavedMap[]) => void,
+  onError?: (error: Error) => void,
+): () => void {
+  if (!isDbReady()) {
+    console.warn("[listenToSavedMaps] Firebase Database not initialized.");
+    return () => {};
+  }
+  const savedMapsRef = ref(database, SAVED_MAPS_PATH);
+  const listener = onValue(
+    savedMapsRef,
+    (snapshot: DataSnapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        const mapsList: SavedMap[] = Object.entries(data)
+          .map(([key, value]: [string, any]) => ({
+            id: key,
+            name: value.name || "Peta Tanpa Nama",
+            timestamp: Number(value.timestamp) || Date.now(),
+            grid: value.grid,
+          }))
+          .sort((a, b) => b.timestamp - a.timestamp);
+        callback(mapsList);
+      } else {
+        callback([]);
+      }
+    },
+    (error: Error) => {
+      console.error("[listenToSavedMaps] Firebase error:", error);
+      if (onError) onError(error);
+    },
+  );
+  return () => off(savedMapsRef, "value", listener);
+}
+

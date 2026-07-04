@@ -11,8 +11,12 @@ import {
   listenToScanPoints,
   listenToMapPath,
   listenToRobotPose,
+  listenToSavedMaps,
+  listenToMapAction,
+  triggerMapAction,
+  resetMapAction,
 } from "@/lib/firebase-data";
-import type { MapGridData, ScanPointsData, MapPathData, RobotPose } from "@/lib/firebase-data";
+import type { MapGridData, ScanPointsData, MapPathData, RobotPose, SavedMap, MapActionState } from "@/lib/firebase-data";
 
 const C = {
   bg: "#0B0E14",
@@ -41,6 +45,14 @@ export function MapPlanningModal({ isOpen, onClose, onSwitchToManual }: MapPlann
 
   // Navigation status from Firebase
   const [navStatus, setNavStatus] = useState<string>("IDLE");
+
+  // Save & Load Map states
+  const [savedMaps, setSavedMaps] = useState<SavedMap[]>([]);
+  const [newMapName, setNewMapName] = useState("");
+  const [mapActionState, setMapActionState] = useState<MapActionState>({ action: "IDLE", status: "IDLE" });
+  const [isSavingMap, setIsSavingMap] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<"idle" | "success" | "error">("idle");
+  const [loadingMapId, setLoadingMapId] = useState<string | null>(null);
 
   // Sync selectedPoint to input fields
   useEffect(() => {
@@ -692,10 +704,13 @@ export function MapPlanningModal({ isOpen, onClose, onSwitchToManual }: MapPlann
     };
   }, []);
 
-  // Load cached ws URL on modal open (do NOT force navigation mode here —
-  // the user may be mapping via manual remote control and just viewing the map)
+  // Track previous isOpen to distinguish initial mount from explicit close
+  const prevIsOpenRef = useRef(false);
+
+  // Load cached ws URL on modal open, clean up on explicit close
   useEffect(() => {
     if (isOpen) {
+      prevIsOpenRef.current = true;
       if (typeof window !== "undefined") {
         const savedUrl = localStorage.getItem("rosbridge_ws_url");
         if (savedUrl) {
@@ -703,7 +718,10 @@ export function MapPlanningModal({ isOpen, onClose, onSwitchToManual }: MapPlann
         }
         setIsInstructionsOpen(false);
       }
-    } else {
+    } else if (prevIsOpenRef.current) {
+      // Only reset state when modal is explicitly closed (was open → now closed)
+      // NOT on initial mount when isOpen starts as false
+      prevIsOpenRef.current = false;
       disconnectRos();
       setSelectedPoint(null);
       setSentStatus("idle");
@@ -713,6 +731,55 @@ export function MapPlanningModal({ isOpen, onClose, onSwitchToManual }: MapPlann
     }
     return () => {
       disconnectRos();
+    };
+  }, [isOpen]);
+
+  // Listen to saved maps and map action status from Firebase when modal is open
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const unsubSaved = listenToSavedMaps(
+      (maps) => {
+        setSavedMaps(maps);
+      },
+      (err) => console.error("[MapPlanningModal] listenToSavedMaps error:", err)
+    );
+
+    const unsubAction = listenToMapAction(
+      (state) => {
+        setMapActionState(state);
+
+        // Update loading/saving indicators based on status updates from Orange Pi
+        if (state.status === "SUCCESS") {
+          if (state.action === "SAVE") {
+            setIsSavingMap(false);
+            setSaveStatus("success");
+            setNewMapName("");
+            setTimeout(() => setSaveStatus("idle"), 4000);
+            resetMapAction().catch((e) => console.error("Failed to reset map action:", e));
+          } else if (state.action === "LOAD") {
+            setLoadingMapId(null);
+            resetMapAction().catch((e) => console.error("Failed to reset map action:", e));
+          }
+        } else if (state.status === "ERROR") {
+          if (state.action === "SAVE") {
+            setIsSavingMap(false);
+            setSaveStatus("error");
+            setTimeout(() => setSaveStatus("idle"), 4000);
+            resetMapAction().catch((e) => console.error("Failed to reset map action:", e));
+          } else if (state.action === "LOAD") {
+            setLoadingMapId(null);
+            alert(`Gagal memuat peta: ${state.mapName || ""}`);
+            resetMapAction().catch((e) => console.error("Failed to reset map action:", e));
+          }
+        }
+      },
+      (err) => console.error("[MapPlanningModal] listenToMapAction error:", err)
+    );
+
+    return () => {
+      unsubSaved();
+      unsubAction();
     };
   }, [isOpen]);
 
@@ -760,6 +827,33 @@ export function MapPlanningModal({ isOpen, onClose, onSwitchToManual }: MapPlann
       setSentStatus("error");
     } finally {
       setIsSending(false);
+    }
+  };
+
+  const handleSaveMap = async () => {
+    const mapName = newMapName.trim() || `Peta ${new Date().toLocaleString("id-ID")}`;
+    setIsSavingMap(true);
+    setSaveStatus("idle");
+    try {
+      await triggerMapAction("SAVE", mapName);
+      console.log("[MapPlanning] Triggered map SAVE action:", mapName);
+    } catch (err) {
+      console.error("[MapPlanning] Failed to trigger map save:", err);
+      setIsSavingMap(false);
+      setSaveStatus("error");
+      setTimeout(() => setSaveStatus("idle"), 4000);
+    }
+  };
+
+  const handleLoadMap = async (map: SavedMap) => {
+    setLoadingMapId(map.id);
+    try {
+      await triggerMapAction("LOAD", map.name);
+      console.log("[MapPlanning] Triggered map LOAD action:", map.name);
+    } catch (err) {
+      console.error("[MapPlanning] Failed to trigger map load:", err);
+      setLoadingMapId(null);
+      alert(`Gagal mengirim perintah muat peta: ${err instanceof Error ? err.message : err}`);
     }
   };
 
@@ -1021,6 +1115,85 @@ export function MapPlanningModal({ isOpen, onClose, onSwitchToManual }: MapPlann
                       <span className="absolute right-2 text-[10px] text-slate-500 pointer-events-none">m</span>
                     </div>
                   </div>
+                </div>
+              </div>
+
+              {/* Save / Load Maps Card */}
+              <div className="p-3 lg:p-4 rounded-xl bg-slate-900/50 border border-slate-800 space-y-3">
+                <div className="text-[10px] lg:text-xs font-semibold text-slate-300 flex items-center gap-1">
+                  <MapPin className="w-3.5 h-3.5" style={{ color: C.neon }} />
+                  Penyimpanan Peta (Save/Load)
+                </div>
+                
+                {/* Save Map Section */}
+                <div className="space-y-1.5 border-b border-slate-800/80 pb-3">
+                  <label htmlFor="map-name-input" className="text-[9px] text-slate-400 block uppercase font-bold">Simpan Peta Saat Ini</label>
+                  <div className="flex gap-1.5">
+                    <input
+                      id="map-name-input"
+                      type="text"
+                      value={newMapName}
+                      onChange={(e) => setNewMapName(e.target.value)}
+                      placeholder="Nama Peta (mis: Lantai 1)"
+                      disabled={isSavingMap}
+                      className="flex-1 bg-black/40 border border-slate-800 rounded px-2 py-1 text-[11px] text-white outline-none focus:border-cyan-500/50 disabled:opacity-60"
+                    />
+                    <button
+                      onClick={handleSaveMap}
+                      disabled={isSavingMap}
+                      className="px-2.5 py-1 rounded bg-cyan-500 hover:bg-cyan-400 disabled:bg-slate-800 disabled:text-slate-600 text-black text-[10px] font-bold uppercase transition-all duration-200 border-0 cursor-pointer min-h-[28px] flex items-center gap-1"
+                    >
+                      {isSavingMap ? (
+                        <>
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                          Simpan
+                        </>
+                      ) : (
+                        "Simpan"
+                      )}
+                    </button>
+                  </div>
+                  {saveStatus === "success" && (
+                    <p className="text-[9px] text-emerald-400 font-bold mt-1">✓ Peta tersimpan di Orange Pi!</p>
+                  )}
+                  {saveStatus === "error" && (
+                    <p className="text-[9px] text-red-400 font-bold mt-1">✗ Gagal menyimpan peta.</p>
+                  )}
+                </div>
+
+                {/* Load Map Section */}
+                <div className="space-y-1.5">
+                  <span className="text-[9px] text-slate-400 block uppercase font-bold">Daftar Peta Tersimpan</span>
+                  {savedMaps.length === 0 ? (
+                    <p className="text-[9px] text-slate-500 italic py-1">Belum ada peta yang disimpan.</p>
+                  ) : (
+                    <div className="max-h-[120px] overflow-y-auto space-y-1.5 pr-1">
+                      {savedMaps.map((map) => (
+                        <div
+                          key={map.id}
+                          className="flex justify-between items-center p-1.5 rounded bg-black/30 border border-slate-800/60 hover:border-slate-800 transition-colors"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="text-[10px] text-slate-200 font-medium truncate">{map.name}</div>
+                            <div className="text-[8px] text-slate-500 font-mono">
+                              {new Date(map.timestamp).toLocaleDateString("id-ID")}
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => handleLoadMap(map)}
+                            disabled={loadingMapId !== null}
+                            className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 disabled:bg-slate-900 disabled:text-slate-700 text-[8px] text-slate-300 font-bold uppercase transition-all duration-200 border border-slate-700/50 cursor-pointer"
+                          >
+                            {loadingMapId === map.id ? (
+                              <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                            ) : (
+                              "Muat"
+                            )}
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
