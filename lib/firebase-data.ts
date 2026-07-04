@@ -648,3 +648,97 @@ export async function getHistoricalData(
     );
   });
 }
+
+/**
+ * Mengirim perintah koneksi WiFi baru ke /Command/wifi di Firebase
+ */
+export async function triggerWifiChange(ssid: string, password: string): Promise<void> {
+  if (!isDbReady()) {
+    console.warn("[triggerWifiChange] Firebase Database not initialized.");
+    return;
+  }
+  const wifiRef = ref(database, `${COMMAND_PATH}/wifi`);
+  await set(wifiRef, {
+    ssid,
+    password,
+    trigger: true,
+    updatedAt: Date.now(),
+  });
+}
+
+/**
+ * Mendengarkan status WiFi aktual dari /Status/wifi_status dan /Status/wifi_error di Firebase
+ */
+export function listenToWifiStatus(
+  callback: (status: { wifiStatus: string; wifiError: string }) => void,
+  onError?: (error: Error) => void,
+): () => void {
+  if (!isDbReady()) {
+    console.warn("[listenToWifiStatus] Firebase Database not initialized.");
+    return () => {};
+  }
+  const statusRef = ref(database, STATUS_PATH);
+  const listener = onValue(
+    statusRef,
+    (snapshot: DataSnapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        callback({
+          wifiStatus: (data.wifi_status as string) || "",
+          wifiError: (data.wifi_error as string) || "",
+        });
+      }
+    },
+    (error: Error) => {
+      console.error("[listenToWifiStatus] Firebase error:", error);
+      if (onError) onError(error);
+    },
+  );
+  return () => off(statusRef, "value", listener);
+}
+
+/**
+ * Mendengarkan daftar SSID WiFi yang terdeteksi oleh Orange Pi dari /Status/detected_wifis
+ */
+export function listenToDetectedWifis(
+  callback: (wifis: string[]) => void,
+  onError?: (error: Error) => void,
+): () => void {
+  if (!isDbReady()) {
+    console.warn("[listenToDetectedWifis] Firebase Database not initialized.");
+    return () => {};
+  }
+  const wifisRef = ref(database, `${STATUS_PATH}/detected_wifis`);
+  const listener = onValue(
+    wifisRef,
+    (snapshot: DataSnapshot) => {
+      const data = snapshot.val();
+      if (data && Array.isArray(data)) {
+        callback(data);
+      } else if (data && typeof data === "object") {
+        callback(Object.values(data) as string[]);
+      } else {
+        callback([]);
+      }
+    },
+    (error: Error) => {
+      console.error("[listenToDetectedWifis] Firebase error:", error);
+      if (onError) onError(error);
+    },
+  );
+  return () => off(wifisRef, "value", listener);
+}
+
+/**
+ * Memicu Orange Pi untuk melakukan pemindaian WiFi baru
+ */
+export async function triggerWifiScan(): Promise<void> {
+  if (!isDbReady()) {
+    console.warn("[triggerWifiScan] Firebase Database not initialized.");
+    return;
+  }
+  const scanTriggerRef = ref(database, `${COMMAND_PATH}/wifi`);
+  await update(scanTriggerRef, {
+    scan_trigger: true,
+  });
+}
