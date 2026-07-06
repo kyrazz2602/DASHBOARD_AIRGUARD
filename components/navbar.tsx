@@ -330,7 +330,7 @@ export function Navbar({ alerts }: NavbarProps = {}) {
                   </button>
 
                   {isMobileNotifDropdownOpen && (
-                    <div className="absolute right-0 mt-2 w-72 sm:w-80 rounded-2xl border border-border/60 dark:border-white/10 bg-card/95 shadow-2xl backdrop-blur-md overflow-hidden animate-in fade-in-0 zoom-in-95 duration-200">
+                    <div className="absolute right-0 mt-2 w-[calc(100vw-2rem)] sm:w-80 max-w-sm rounded-2xl border border-border/60 dark:border-white/10 bg-card/95 shadow-2xl backdrop-blur-md overflow-hidden animate-in fade-in-0 zoom-in-95 duration-200">
                       {renderDropdownContent()}
                     </div>
                   )}

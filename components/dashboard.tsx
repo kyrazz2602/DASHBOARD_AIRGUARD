@@ -255,7 +255,7 @@ export default function Dashboard({ user }: { user: User }) {
       <MobileNav />
 
       {overallStatus === "Danger" && !isDangerAcknowledged && (
-        <div className="w-full bg-gradient-to-r from-red-950 via-red-800 to-rose-900 text-white py-4 px-4 md:px-8 border-b border-red-500/30 shadow-lg animate-in slide-in-from-top duration-300 sticky top-16 z-40">
+        <div className="w-full bg-gradient-to-r from-red-950 via-red-800 to-rose-900 text-white py-4 px-4 md:px-8 border-b border-red-500/30 shadow-lg animate-in slide-in-from-top duration-300 sticky top-16 z-40 max-h-[65vh] overflow-y-auto">
           <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-3.5">
               <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center animate-pulse shrink-0">
@@ -301,7 +301,7 @@ export default function Dashboard({ user }: { user: User }) {
         </div>
       )}
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 py-6 md:py-8 pb-24 md:pb-10 flex flex-col gap-12 sm:gap-16">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 py-6 md:py-8 pb-32 md:pb-10 flex flex-col gap-6 sm:gap-10 lg:gap-14">
         {/* ── Header & Banner Block ── */}
         <div className="space-y-6">
           {/* Critical Battery Alert Banner */}

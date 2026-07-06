@@ -29,7 +29,7 @@ export default function HomePage() {
       <Navbar />
 
       {/* --- HERO SECTION --- */}
-      <section className="relative pt-1 pb-32 px-4 overflow-hidden">
+      <section className="relative pt-1 pb-16 sm:pb-32 px-4 overflow-hidden">
         {/* Animated Background Blobs (Efek Cahaya) */}
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-full -z-10 pointer-events-none">
           <div className="absolute top-[-10%] left-[20%] w-[500px] h-[500px] bg-primary/20 rounded-full blur-[100px] animate-pulse" />
@@ -48,13 +48,13 @@ export default function HomePage() {
             </div>
 
             <div className="space-y-4">
-              <h1 className="text-5xl md:text-6xl font-bold tracking-tight text-foreground leading-[1.1]">
+              <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-foreground leading-[1.1]">
                 Udara Bersih untuk <br />
                 <span className="bg-gradient-to-r from-primary via-blue-400 to-cyan-400 bg-clip-text text-transparent">
                   Keluarga Sehat
                 </span>
               </h1>
-              <p className="text-lg md:text-xl text-muted-foreground max-w-xl leading-relaxed">
+              <p className="text-base sm:text-lg md:text-xl text-muted-foreground max-w-xl leading-relaxed">
                 AIRGUARD membantu Anda memantau kualitas udara rumah secara
                 real-time. Deteksi polutan berbahaya sebelum mereka membahayakan
                 kesehatan Anda.
@@ -93,20 +93,20 @@ export default function HomePage() {
           </div>
 
           {/* Right Image — Enhanced Hero Visual */}
-          <div className="relative lg:h-[600px] flex items-center justify-center animate-in slide-in-from-right-5 duration-700 delay-100">
+          <div className="relative hidden sm:flex lg:h-[600px] items-center justify-center animate-in slide-in-from-right-5 duration-700 delay-100">
             {/* Outer glow pulse rings */}
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <div className="absolute inset-0 hidden md:flex items-center justify-center pointer-events-none">
               <div className="w-[420px] h-[420px] rounded-full border border-primary/20 animate-ping [animation-duration:3s]" />
               <div className="absolute w-[360px] h-[360px] rounded-full border border-primary/15 animate-ping [animation-duration:4s] [animation-delay:1s]" />
             </div>
 
             {/* Rotating orbit ring */}
-            <div className="absolute w-[480px] h-[480px] rounded-full border border-dashed border-primary/20 animate-[spin_20s_linear_infinite] pointer-events-none">
+            <div className="absolute w-[480px] h-[480px] rounded-full border border-dashed border-primary/20 animate-[spin_20s_linear_infinite] pointer-events-none hidden md:block">
               {/* Orbit dot */}
               <span className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-primary shadow-[0_0_8px_2px_hsl(var(--primary)/0.6)]" />
             </div>
             {/* Counter-rotating orbit ring */}
-            <div className="absolute w-[540px] h-[540px] rounded-full border border-dashed border-blue-400/10 animate-[spin_30s_linear_infinite_reverse] pointer-events-none">
+            <div className="absolute w-[540px] h-[540px] rounded-full border border-dashed border-blue-400/10 animate-[spin_30s_linear_infinite_reverse] pointer-events-none hidden md:block">
               <span className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 w-2 h-2 rounded-full bg-blue-400/60 shadow-[0_0_6px_2px_rgba(96,165,250,0.4)]" />
             </div>
 

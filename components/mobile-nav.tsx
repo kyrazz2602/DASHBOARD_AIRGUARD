@@ -18,8 +18,10 @@ export function MobileNav() {
   ];
 
   return (
-    <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-card/95 backdrop-blur-xl border-t border-border/60 safe-area-pb">
-      <div className="flex items-center justify-around px-2 py-1">
+    <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-card/95 backdrop-blur-xl border-t border-border/60"
+      style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
+    >
+      <div className="flex items-center justify-around px-2 py-1.5">
         {items.map(({ label, icon: Icon, path }) => {
           const active = pathname === path;
           return (
@@ -27,22 +29,26 @@ export function MobileNav() {
               key={path}
               onClick={() => router.push(path)}
               className={cn(
-                "flex flex-col items-center gap-1 py-2.5 px-6 rounded-xl transition-colors",
+                "relative flex flex-col items-center gap-0.5 min-w-[64px] min-h-[48px] py-2 px-4 rounded-2xl transition-all duration-200 active:scale-95",
                 active
                   ? "text-primary"
                   : "text-muted-foreground hover:text-foreground",
               )}
             >
+              {/* Active indicator pill */}
+              {active && (
+                <span className="absolute top-1 left-1/2 -translate-x-1/2 w-8 h-1 rounded-full bg-primary animate-in fade-in zoom-in-50 duration-300" />
+              )}
               <Icon
                 className={cn(
-                  "w-5 h-5 transition-transform",
-                  active && "scale-110",
+                  "w-5 h-5 transition-all duration-200",
+                  active && "scale-110 drop-shadow-[0_0_4px_hsl(var(--primary)/0.4)]",
                 )}
               />
               <span
                 className={cn(
-                  "text-[10px] font-semibold",
-                  active && "font-bold",
+                  "text-[10px] leading-tight transition-all duration-200",
+                  active ? "font-bold" : "font-semibold",
                 )}
               >
                 {label}
@@ -56,10 +62,10 @@ export function MobileNav() {
             logout();
             router.push("/home");
           }}
-          className="flex flex-col items-center gap-1 py-2.5 px-6 rounded-xl text-muted-foreground hover:text-destructive transition-colors"
+          className="relative flex flex-col items-center gap-0.5 min-w-[64px] min-h-[48px] py-2 px-4 rounded-2xl text-muted-foreground hover:text-destructive transition-all duration-200 active:scale-95"
         >
           <LogOut className="w-5 h-5" />
-          <span className="text-[10px] font-semibold">Keluar</span>
+          <span className="text-[10px] font-semibold leading-tight">Keluar</span>
         </button>
       </div>
     </nav>

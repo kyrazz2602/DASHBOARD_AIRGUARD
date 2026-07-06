@@ -100,7 +100,7 @@ export function NotificationToast({
       onMouseEnter={pauseTimer}
       onMouseLeave={startTimer}
       className={`
-        fixed top-20 right-4 z-50 w-full max-w-sm
+        fixed top-20 left-4 right-4 sm:left-auto sm:right-4 z-50 sm:max-w-sm
         flex items-start gap-3 p-4 rounded-xl border shadow-lg backdrop-blur-md
         animate-in slide-in-from-right-5 fade-in duration-300
         ${config.styles}
@@ -118,12 +118,12 @@ export function NotificationToast({
 
       <button
         onClick={onClose}
-        className="shrink-0 -mr-2 -mt-2 p-3 sm:p-1.5 min-h-[44px] sm:min-h-0 min-w-[44px] sm:min-w-0 flex items-center justify-center rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition-colors opacity-60 hover:opacity-100"
+        className="shrink-0 -mr-2 -mt-2 p-3 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition-colors opacity-60 hover:opacity-100 active:scale-95"
         aria-label="Close notification">
         <X className="w-4 h-4" />
       </button>
 
-      {/* Optional: Progress Bar Visual (Garis tipis di bawah) */}
+      {/* Progress Bar */}
       <div className="absolute bottom-0 left-2 right-2 h-[2px] rounded-full bg-current opacity-20 overflow-hidden">
         <div
           className="h-full w-full bg-current origin-left animate-[shrink_5s_linear_forwards]"

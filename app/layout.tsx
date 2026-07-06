@@ -16,6 +16,17 @@ export const metadata: Metadata = {
     shortcut: '/Gemini_Generated_Image.png',
     apple: '/Gemini_Generated_Image.png',
   },
+  other: {
+    'mobile-web-app-capable': 'yes',
+    'apple-mobile-web-app-status-bar-style': 'black-translucent',
+  },
+}
+
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  viewportFit: 'cover' as const,
 }
 
 export default function RootLayout({

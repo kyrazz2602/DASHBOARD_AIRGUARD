@@ -637,7 +637,7 @@ export function ChartSection() {
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <Card className="p-5 sm:p-6 bg-card border border-border/60 shadow-sm">
+    <Card className="p-4 sm:p-6 bg-card border border-border/60 shadow-sm">
       {/* ── Header ── */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-5 gap-3">
         <div className="flex items-center gap-3">
@@ -695,7 +695,7 @@ export function ChartSection() {
           {isLive ? (
             // Live mode: record & export
             isRecording ? (
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <Button
                   onClick={stopAndExport}
                   size="sm"
@@ -854,7 +854,7 @@ export function ChartSection() {
       </div>
 
       {/* ── Chart ── */}
-      <div className="relative h-[300px] sm:h-[350px] w-full overflow-hidden">
+      <div className="relative h-[260px] sm:h-[350px] w-full overflow-hidden">
         {isLoading ? (
           <div className="absolute inset-0 flex flex-col justify-between p-4 animate-pulse">
             <div className="flex justify-between items-center mb-4">
