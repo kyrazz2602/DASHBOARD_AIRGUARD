@@ -155,6 +155,7 @@ export function listenToSensorData(
           suhu: Number(data.Suhu !== undefined ? data.Suhu : data.suhu) || 25,
           tegangan: Number(data.Tegangan !== undefined ? data.Tegangan : data.tegangan) || 0,
           battery: Number(data.Persentase !== undefined ? data.Persentase : (data.battery !== undefined ? data.battery : data.Battery)) || 0,
+          arus: Number(data.Arus !== undefined ? data.Arus : data.arus) || 0,
           timestamp: new Date(),
         };
         callback(sensorReading);
@@ -652,6 +653,7 @@ export async function getHistoricalData(
               suhu: Number(values.suhu !== undefined ? values.suhu : values.Suhu) || 0,
               tegangan: Number(values.tegangan !== undefined ? values.tegangan : values.Tegangan) || 0,
               battery: Number(values.battery !== undefined ? values.battery : (values.Persentase !== undefined ? values.Persentase : values.Battery)) || 0,
+              arus: Number(values.arus !== undefined ? values.arus : values.Arus) || 0,
             });
           }
         });
@@ -671,8 +673,12 @@ export async function getHistoricalData(
   });
 }
 
+/** Jeda singkat agar Orange Pi bridge mendeteksi transisi false → true */
+const WIFI_TRIGGER_PULSE_MS = 200;
+
 /**
- * Mengirim perintah koneksi WiFi baru ke /Command/wifi di Firebase
+ * Mengirim perintah koneksi WiFi baru ke /Command/wifi di Firebase.
+ * Reset trigger ke false dulu supaya percobaan ulang selalu terdeteksi bridge.
  */
 export async function triggerWifiChange(ssid: string, password: string): Promise<void> {
   if (!isDbReady()) {
@@ -680,6 +686,8 @@ export async function triggerWifiChange(ssid: string, password: string): Promise
     return;
   }
   const wifiRef = ref(database, `${COMMAND_PATH}/wifi`);
+  await update(wifiRef, { trigger: false });
+  await new Promise((resolve) => setTimeout(resolve, WIFI_TRIGGER_PULSE_MS));
   await set(wifiRef, {
     ssid,
     password,
@@ -752,7 +760,8 @@ export function listenToDetectedWifis(
 }
 
 /**
- * Memicu Orange Pi untuk melakukan pemindaian WiFi baru
+ * Memicu Orange Pi untuk melakukan pemindaian WiFi baru.
+ * Reset scan_trigger ke false dulu supaya pemindaian ulang selalu terdeteksi bridge.
  */
 export async function triggerWifiScan(): Promise<void> {
   if (!isDbReady()) {
@@ -760,8 +769,11 @@ export async function triggerWifiScan(): Promise<void> {
     return;
   }
   const scanTriggerRef = ref(database, `${COMMAND_PATH}/wifi`);
+  await update(scanTriggerRef, { scan_trigger: false });
+  await new Promise((resolve) => setTimeout(resolve, WIFI_TRIGGER_PULSE_MS));
   await update(scanTriggerRef, {
     scan_trigger: true,
+    updatedAt: Date.now(),
   });
 }
 

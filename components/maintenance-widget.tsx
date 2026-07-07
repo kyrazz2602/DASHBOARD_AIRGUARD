@@ -39,6 +39,8 @@ interface MaintenanceWidgetProps {
   currentPm25?: number;
   temperature?: number;
   batteryLevel?: number;
+  batteryVoltage?: number;
+  systemCurrent?: number;
   mlStatus?: FilterStatus | null;
   probabilities?: FilterProbabilities | null;
   recommendation?: string | null;
@@ -60,6 +62,8 @@ export function MaintenanceWidget({
   currentPm25 = 0,
   temperature = 28,
   batteryLevel = 100,
+  batteryVoltage = 0,
+  systemCurrent = 0,
   mlStatus = null,
   probabilities = null,
   recommendation = null,
@@ -323,8 +327,13 @@ export function MaintenanceWidget({
                   batteryConfig.color,
                 )}
               >
-                {batteryLevel}%
+                {batteryLevel}% <span className="text-[10px] text-muted-foreground font-medium">({batteryVoltage.toFixed(1)}V)</span>
               </p>
+              {systemCurrent !== undefined && systemCurrent !== null && (
+                <p className="text-[9px] font-semibold text-muted-foreground mt-0.5">
+                  Arus: {systemCurrent.toFixed(2)}A
+                </p>
+              )}
               {batteryConfig.critical && (
                 <p className="text-[8px] font-extrabold text-rose-500 dark:text-rose-400 tracking-wider uppercase animate-pulse mt-0.5">
                   Segera Cas

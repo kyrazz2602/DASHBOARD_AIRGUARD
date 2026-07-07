@@ -84,7 +84,7 @@ def test_predict_default_model(client):
     response = client.post("/predict", json=payload)
     assert response.status_code == 200
     data = response.json()
-    assert data["model_used"] == "decision_tree"  # Default should be decision_tree
+    assert data["model_used"] == "random_forest"  # Default should be random_forest
 
 
 def test_predict_invalid_input(client):

@@ -7,6 +7,7 @@ export interface SensorReading {
   suhu: number;
   battery: number; // Persentase (%)
   tegangan: number; // Tegangan (V)
+  arus: number; // Arus (A)
   timestamp: Date;
 }
 
@@ -18,6 +19,7 @@ export interface HistoricalData {
   suhu: number;
   battery: number;
   tegangan: number;
+  arus: number;
   timestamp: Date;
 }
 
@@ -47,6 +49,7 @@ export function generateSensorData(): SensorReading {
     suhu: Math.max(0, baseValues.suhu),
     battery: Math.max(5, 100 - Math.floor(Math.random() * 20)),
     tegangan: Math.max(0, 12 + Math.random() * 4),
+    arus: Math.max(0, 0.5 + Math.random() * 1.5),
     timestamp: new Date(),
   };
 }
@@ -71,6 +74,7 @@ export function generateHistoricalData(days: number): HistoricalData[] {
         suhu: Math.max(0, 25 + Math.sin(dayOffset / 4) * 3 + Math.random() * 2),
         battery: Math.max(5, 100 - Math.floor(Math.random() * 20)),
         tegangan: Math.max(0, 12 + Math.random() * 4),
+        arus: Math.max(0, 0.5 + Math.random() * 1.5),
       });
     }
   }

@@ -420,6 +420,8 @@ export default function Dashboard({ user }: { user: User }) {
                 currentPm25={sensorData.pm25}
                 temperature={sensorData.suhu}
                 batteryLevel={sensorData.battery}
+                batteryVoltage={sensorData.tegangan}
+                systemCurrent={sensorData.arus}
                 mlStatus={mlStatus}
                 probabilities={probabilities}
                 recommendation={recommendation}
@@ -472,6 +474,8 @@ export default function Dashboard({ user }: { user: User }) {
                 currentPm25={sensorData.pm25}
                 temperature={sensorData.suhu}
                 batteryLevel={sensorData.battery}
+                batteryVoltage={sensorData.tegangan}
+                systemCurrent={sensorData.arus}
                 mlStatus={mlStatus}
                 probabilities={probabilities}
                 recommendation={recommendation}

@@ -406,31 +406,6 @@ async def predict(request: PredictRequest) -> Any:
     # Calculate probabilities from RUL
     probabilities = calculate_pseudo_probabilities(predicted_rul)
 
-    # Calculate rule-based safety override
-    pm25_val = float(current_features["PM25"].iloc[0])
-    pm10_val = float(current_features["PM10"].iloc[0])
-    co_val = float(current_features["CO"].iloc[0])
-    voc_val = float(current_features["VOC"].iloc[0])
-    cpi_val = float(current_features["CPI"].iloc[0])
-    total_exceed_val = int(current_features["Total_exceed"].iloc[0])
-
-    if pm25_val > 125.4 or pm10_val > 354.0 or co_val > 50.0 or voc_val > 100.0:
-        rule_status = "Bahaya"
-    elif pm25_val > 35.4 or pm10_val > 154.0 or co_val > 15.0 or voc_val > 20.0:
-        rule_status = "Perhatian"
-    else:
-        rule_status = "Aman"
-
-    # AI Guardrail override
-    severity = {"Aman": 0, "Perhatian": 1, "Bahaya": 2}
-    if severity[rule_status] > severity[status]:
-        logger.info(f"Guardrail trigger: overriding status '{status}' with '{rule_status}' due to active parameters.")
-        status = rule_status
-        probabilities = {
-            "Aman": 1.0 if status == "Aman" else 0.0,
-            "Perhatian": 1.0 if status == "Perhatian" else 0.0,
-            "Bahaya": 1.0 if status == "Bahaya" else 0.0
-        }
 
     confidence = float(max(probabilities.values()))
     recommendation = get_recommendation(status, request, integrity)
