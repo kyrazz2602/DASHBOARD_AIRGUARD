@@ -49,6 +49,94 @@ export function getRuleBasedStatus(features: SensorFeatures): FilterStatus {
   return "Aman";
 }
 
+const MAX_RUL_HOURS = 4320;
+
+/**
+ * Maps filter integrity percentage to status label.
+ * Mirrors the same thresholds used by the Python ML service.
+ */
+export function getFilterStatusFromIntegrity(integrityPercent: number): FilterStatus {
+  if (integrityPercent >= 70) return "Aman";
+  if (integrityPercent >= 30) return "Perhatian";
+  return "Bahaya";
+}
+
+/**
+ * Derives pseudo-probabilities from predicted RUL hours.
+ * Ported from python-ml-service/main.py calculate_pseudo_probabilities().
+ */
+export function getProbabilitiesFromRul(rulHours: number): FilterProbabilities {
+  const rul = Math.max(0, Math.min(rulHours, MAX_RUL_HOURS));
+  let pAman: number;
+  let pPerhatian: number;
+  let pBahaya: number;
+
+  if (rul >= 3024) {
+    const ratio = (rul - 3024) / (4320 - 3024);
+    pAman = 0.7 + 0.3 * ratio;
+    pPerhatian = 1.0 - pAman;
+    pBahaya = 0.0;
+  } else if (rul >= 1296) {
+    if (rul >= 2160) {
+      const ratio = (rul - 2160) / (3024 - 2160);
+      pAman = 0.1 + 0.6 * ratio;
+      pPerhatian = 0.8 - 0.5 * ratio;
+      pBahaya = 0.1 - 0.1 * ratio;
+    } else {
+      const ratio = (rul - 1296) / (2160 - 1296);
+      pAman = 0.1 * ratio;
+      pBahaya = 0.7 - 0.6 * ratio;
+      pPerhatian = 1.0 - pAman - pBahaya;
+    }
+  } else {
+    const ratio = rul / 1296;
+    pBahaya = 1.0 - 0.3 * ratio;
+    pPerhatian = 1.0 - pBahaya;
+    pAman = 0.0;
+  }
+
+  return {
+    aman: Math.round(pAman * 10000) / 10000,
+    perhatian: Math.round(pPerhatian * 10000) / 10000,
+    bahaya: Math.round(pBahaya * 10000) / 10000,
+  };
+}
+
+/**
+ * Builds a complete fallback prediction from rule-based filter estimation
+ * when the ML service is unavailable.
+ */
+export function buildFallbackFilterPrediction(
+  healthPct: number,
+  daysRemaining: number,
+): Pick<
+  MLPredictionResult,
+  "status" | "probabilities" | "recommendation" | "confidence" | "predictedRulHours" | "filterIntegrityPercent"
+> {
+  const integrity = Math.max(0, Math.min(100, healthPct));
+  const rulHours = Math.max(0, daysRemaining * 24);
+  const status = getFilterStatusFromIntegrity(integrity);
+  const probabilities = getProbabilitiesFromRul(rulHours);
+
+  let recommendation: string;
+  if (status === "Bahaya") {
+    recommendation = `Kondisi Ganti Filter: Sisa umur pakai filter kritis (${integrity.toFixed(0)}%). Rekomendasi: Segera ganti filter HEPA baru.`;
+  } else if (status === "Perhatian") {
+    recommendation = `Perhatian: Kesehatan filter mulai menurun (${integrity.toFixed(0)}%). Rekomendasi: Bersihkan pra-filter dan jadwalkan penggantian HEPA dalam waktu dekat.`;
+  } else {
+    recommendation = "Filter berfungsi optimal berdasarkan estimasi umur pakai dan beban polutan.";
+  }
+
+  return {
+    status,
+    probabilities,
+    recommendation,
+    confidence: Math.max(probabilities.aman, probabilities.perhatian, probabilities.bahaya),
+    predictedRulHours: rulHours,
+    filterIntegrityPercent: integrity,
+  };
+}
+
 /**
  * Identity mapping from a SensorReading-like object to SensorFeatures.
  * Preserves all five values exactly without any transformation.

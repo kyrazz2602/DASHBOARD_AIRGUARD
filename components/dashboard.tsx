@@ -36,14 +36,8 @@ export default function Dashboard({ user }: { user: User }) {
     mlStatus,
     probabilities,
     recommendation,
-    confidence,
     isMLAvailable,
     isPredicting,
-    error,
-    selectedModel,
-    setSelectedModel,
-    predictedRulHours,
-    filterIntegrityPercent,
   } = useMLFilterEstimation();
 
   const [notification, setNotification] = useState<{
@@ -425,12 +419,8 @@ export default function Dashboard({ user }: { user: User }) {
                 mlStatus={mlStatus}
                 probabilities={probabilities}
                 recommendation={recommendation}
-                confidence={confidence}
                 isMLAvailable={isMLAvailable}
                 isPredicting={isPredicting}
-                selectedModel={selectedModel}
-                predictedRulHours={predictedRulHours}
-                filterIntegrityPercent={filterIntegrityPercent}
               />
             </div>
           </aside>
@@ -479,12 +469,8 @@ export default function Dashboard({ user }: { user: User }) {
                 mlStatus={mlStatus}
                 probabilities={probabilities}
                 recommendation={recommendation}
-                confidence={confidence}
                 isMLAvailable={isMLAvailable}
                 isPredicting={isPredicting}
-                selectedModel={selectedModel}
-                predictedRulHours={predictedRulHours}
-                filterIntegrityPercent={filterIntegrityPercent}
               />
             </section>
           </div>

@@ -44,14 +44,8 @@ interface MaintenanceWidgetProps {
   mlStatus?: FilterStatus | null;
   probabilities?: FilterProbabilities | null;
   recommendation?: string | null;
-  confidence?: number | null;
   isMLAvailable?: boolean;
   isPredicting?: boolean;
-  error?: string | null;
-  selectedModel?: string;
-  onModelChange?: (model: string) => void;
-  predictedRulHours?: number | null;
-  filterIntegrityPercent?: number | null;
 }
 
 export function MaintenanceWidget({
@@ -67,20 +61,14 @@ export function MaintenanceWidget({
   mlStatus = null,
   probabilities = null,
   recommendation = null,
-  confidence = null,
   isMLAvailable = false,
   isPredicting = false,
-  error = null,
-  selectedModel = "decision_tree",
-  onModelChange,
-  predictedRulHours = null,
-  filterIntegrityPercent = null,
 }: MaintenanceWidgetProps) {
   const filterStatus = useMemo(() => {
-    if (filterHealth > 70) {
+    if (filterHealth >= 70) {
       return {
         icon: <CheckCircle2 className="w-4 h-4" />,
-        label: "Filter Optimal",
+        label: "Aman",
         sublabel: "Berfungsi dengan baik",
         styles: {
           icon: "text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-500/20 shadow-sm shadow-emerald-500/5",
@@ -89,7 +77,7 @@ export function MaintenanceWidget({
           accentBar: "bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-400",
         },
       };
-    } else if (filterHealth > 30) {
+    } else if (filterHealth >= 30) {
       return {
         icon: <AlertCircle className="w-4 h-4" />,
         label: "Perhatian",
@@ -104,7 +92,7 @@ export function MaintenanceWidget({
     } else {
       return {
         icon: <Wrench className="w-4 h-4 animate-bounce" />,
-        label: "Ganti Segera",
+        label: "Ganti Filter",
         sublabel: "Filter sudah tidak efektif",
         styles: {
           icon: "text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/30 border border-rose-100 dark:border-rose-500/20 shadow-sm shadow-rose-500/5",
@@ -144,7 +132,7 @@ export function MaintenanceWidget({
     switch (mlStatus) {
       case "Aman":
         return {
-          label: "Aman",
+          label: "",
           styles:
             "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-200/50 dark:border-emerald-500/20 shadow-[0_0_10px_rgba(16,185,129,0.1)]",
           text: "text-emerald-600 dark:text-emerald-400",
@@ -198,11 +186,24 @@ export function MaintenanceWidget({
 
   const dominantLabel = useMemo(() => {
     if (!probabilities) return null;
-    const maxVal = Math.max(probabilities.aman, probabilities.perhatian, probabilities.bahaya);
-    if (maxVal === probabilities.aman) return "Aman";
-    if (maxVal === probabilities.perhatian) return "Perhatian";
-    return "Ganti Filter";
+    const entries = [
+      { label: "Aman", value: probabilities.aman },
+      { label: "Perhatian", value: probabilities.perhatian },
+      { label: "Ganti Filter", value: probabilities.bahaya },
+    ];
+    const maxVal = Math.max(...entries.map((e) => e.value));
+    if (maxVal <= 0) return null;
+    // Prefer more severe status when probabilities tie
+    const severity = ["Ganti Filter", "Perhatian", "Aman"];
+    return severity.find((label) => {
+      const entry = entries.find((e) => e.label === label);
+      return entry && entry.value === maxVal;
+    }) ?? null;
   }, [probabilities]);
+
+  const hasPredictionData = Boolean(
+    !isPredicting && mlStatus && probabilityBars,
+  );
 
   return (
     <div className="space-y-6">
@@ -355,8 +356,8 @@ export function MaintenanceWidget({
             </span>
           </div>
 
-          {/* ML badge */}
-          {isMLAvailable && mlStatus && mlStatusConfig ? (
+          {/* ML / fallback badge */}
+          {mlStatus && mlStatusConfig ? (
             <Tooltip>
               <TooltipTrigger asChild>
                 <span
@@ -365,90 +366,43 @@ export function MaintenanceWidget({
                     mlStatusConfig.styles,
                   )}
                 >
-                  Prediksi: {mlStatusConfig.label}
+                  {isMLAvailable ? "Prediksi" : "Estimasi"}: {mlStatusConfig.label}
                   <HelpCircle className="w-3 h-3 ml-0.5 opacity-70" />
                 </span>
               </TooltipTrigger>
               <TooltipContent side="top" className="max-w-xs text-xs">
-                Status filter yang diprediksi oleh kecerdasan buatan (Machine Learning) menggunakan algoritma {selectedModel === "decision_tree" ? "Decision Tree (Pohon Keputusan)" : "Random Forest (Hutan Acak)"}.
+                {isMLAvailable
+                  ? "Status filter diprediksi oleh Machine Learning (Random Forest)."
+                  : "Status filter diestimasi dari umur pakai dan beban polutan karena layanan ML sedang offline."}
               </TooltipContent>
             </Tooltip>
-          ) : !isMLAvailable ? (
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-muted border border-border/40 text-muted-foreground shrink-0 shadow-sm">
-              <WifiOff className="w-3.5 h-3.5 animate-pulse" />
-              ML Offline
+          ) : isPredicting ? (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 border border-indigo-200/50 dark:border-indigo-500/20 shrink-0">
+              <Loader2 className="w-3 h-3 animate-spin" />
+              Menganalisis...
             </span>
           ) : null}
         </div>
 
         {/* Content body */}
         <div className="space-y-4">
-          {onModelChange && (
-            <div className="flex justify-between items-center gap-2 bg-muted/30 dark:bg-slate-900/40 p-2 rounded-xl border border-border/80 dark:border-white/5">
-              <span className="text-xs font-semibold text-muted-foreground">Model AI</span>
-              <div className="flex bg-muted/60 dark:bg-slate-950 p-0.5 rounded-lg border border-border/40 dark:border-white/5 relative">
-                <button
-                  type="button"
-                  onClick={() => onModelChange("decision_tree")}
-                  className={cn(
-                    "px-2.5 py-1 text-[10px] font-bold rounded-md transition-all duration-200 cursor-pointer",
-                    selectedModel === "decision_tree"
-                      ? "bg-background text-foreground shadow-sm shadow-black/10 dark:bg-slate-800"
-                      : "text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  Decision Tree
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onModelChange("random_forest")}
-                  className={cn(
-                    "px-2.5 py-1 text-[10px] font-bold rounded-md transition-all duration-200 cursor-pointer",
-                    selectedModel === "random_forest"
-                      ? "bg-background text-foreground shadow-sm shadow-black/10 dark:bg-slate-800"
-                      : "text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  Random Forest
-                </button>
-              </div>
-            </div>
-          )}
-
-
-
-          {/* Error notification */}
-          {error && (
-            <div className="flex items-start gap-2.5 p-3.5 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive animate-in fade-in slide-in-from-top-1 duration-200">
-              <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
-              <div className="space-y-1">
-                <p className="text-xs font-bold leading-none">
-                  Peringatan Sistem
-                </p>
-                <p className="text-[10px] opacity-90 leading-normal font-medium">
-                  {error}
-                </p>
-              </div>
-            </div>
-          )}
-
-          {/* ML offline info */}
-          {!isMLAvailable && (
-            <div className="flex items-center gap-2.5 p-3.5 rounded-xl bg-muted/40 dark:bg-slate-950/40 border border-border/60 dark:border-white/5 shadow-inner">
-              <WifiOff className="w-4 h-4 text-muted-foreground shrink-0 animate-pulse" />
+          {/* ML offline info — shown alongside fallback estimation */}
+          {!isMLAvailable && hasPredictionData && (
+            <div className="flex items-center gap-2.5 p-3 rounded-xl bg-muted/40 dark:bg-slate-950/40 border border-border/60 dark:border-white/5">
+              <WifiOff className="w-4 h-4 text-muted-foreground shrink-0" />
               <div>
                 <p className="text-xs font-bold text-foreground">
-                  Sistem AI Offline
+                  Layanan ML Offline
                 </p>
                 <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight font-medium">
-                  Menggunakan aturan cadangan sistem
+                  Menampilkan estimasi cadangan berbasis umur pakai filter
                 </p>
               </div>
             </div>
           )}
 
           {/* Loading skeleton */}
-          {isMLAvailable && isPredicting && (
+          {isPredicting && (
             <div className="space-y-3.5 animate-pulse">
               {[1, 2, 3].map((i) => (
                 <div key={i} className="space-y-1.5 p-2 border border-transparent">
@@ -463,7 +417,7 @@ export function MaintenanceWidget({
           )}
 
           {/* Probability bars */}
-          {isMLAvailable && !isPredicting && probabilityBars && (
+          {hasPredictionData && (
             <div className="space-y-2">
               {probabilityBars.map((bar) => {
                 const isDominant = dominantLabel === bar.label && bar.value > 0;
@@ -509,7 +463,7 @@ export function MaintenanceWidget({
           )}
 
           {/* Recommendation insights box */}
-          {isMLAvailable && !isPredicting && recommendation && (
+          {hasPredictionData && recommendation && (
             <div className="flex flex-col gap-1.5 p-3.5 rounded-xl bg-gradient-to-br from-indigo-500/5 via-purple-500/5 to-transparent border border-indigo-500/10 dark:border-indigo-500/20 border-l-4 border-l-indigo-500 shadow-sm relative overflow-hidden">
               <div className="flex items-center gap-1.5 text-indigo-600 dark:text-indigo-400 font-bold text-[10px] uppercase tracking-widest">
                 <Sparkles className="w-3.5 h-3.5 animate-pulse" />

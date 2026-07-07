@@ -7,7 +7,9 @@ import {
   predictFilterStatus,
   getRuleBasedStatus,
   extractFeatures,
+  buildFallbackFilterPrediction,
   MLServiceError,
+  getProbabilitiesFromRul,
 } from "@/lib/ml-client";
 import type {
   FilterStatus,
@@ -22,10 +24,8 @@ export interface MLFilterEstimationResult {
   mlStatus: FilterStatus | null;
   probabilities: FilterProbabilities | null;
   recommendation: string | null;
-  confidence: number | null;
   isMLAvailable: boolean;
   isPredicting: boolean;
-  error: string | null;
 
   // From useFilterEstimation (never null)
   healthPct: number;
@@ -35,11 +35,6 @@ export interface MLFilterEstimationResult {
 
   // Rule-based fallback (always available)
   ruleBasedStatus: FilterStatus;
-
-  selectedModel: string;
-  setSelectedModel: (model: string) => void;
-  predictedRulHours: number | null;
-  filterIntegrityPercent: number | null;
 }
 
 // ─── Cache helper ────────────────────────────────────────────────────────────
@@ -73,26 +68,27 @@ function isCacheValid(
   );
 }
 
+// ─── Constants ───────────────────────────────────────────────────────────────
+
+const ML_MODEL = "random_forest";
+
 // ─── Hook ────────────────────────────────────────────────────────────────────
 
 export function useMLFilterEstimation(): MLFilterEstimationResult {
   // ── 8.1 State initialization ──────────────────────────────────────────────
 
   const { data: sensorData } = useSensorData();
-  const { healthPct, daysRemaining, resetFilter, isLoading, error: estimationError, filterStartDate } =
+  const { healthPct, daysRemaining, resetFilter, isLoading, filterStartDate } =
     useFilterEstimation();
 
   const [mlStatus, setMlStatus] = useState<FilterStatus | null>(null);
   const [probabilities, setProbabilities] =
     useState<FilterProbabilities | null>(null);
   const [recommendation, setRecommendation] = useState<string | null>(null);
-  const [confidence, setConfidence] = useState<number | null>(null);
   const [isMLAvailable, setIsMLAvailable] = useState<boolean>(true);
   const [isPredicting, setIsPredicting] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
 
-  // New RUL regression states
-  const [selectedModel, setSelectedModel] = useState<string>("random_forest");
+  // Internal ML outputs used to override filter health estimation
   const [predictedRulHours, setPredictedRulHours] = useState<number | null>(null);
   const [filterIntegrityPercent, setFilterIntegrityPercent] = useState<number | null>(null);
 
@@ -100,10 +96,23 @@ export function useMLFilterEstimation(): MLFilterEstimationResult {
 
   /** Stores the SensorFeatures used in the last successful prediction. */
   const lastFeatures = useRef<SensorFeatures | null>(null);
-  /** Stores the model name used in the last successful prediction. */
-  const lastModel = useRef<string | null>(null);
   /** Tracks whether ML is currently known to be unavailable (for retry logic). */
   const mlUnavailable = useRef<boolean>(false);
+
+  const applyFallbackPrediction = (
+    fallbackHealthPct: number,
+    fallbackDaysRemaining: number,
+  ) => {
+    const fallback = buildFallbackFilterPrediction(
+      fallbackHealthPct,
+      fallbackDaysRemaining,
+    );
+    setMlStatus(fallback.status);
+    setProbabilities(fallback.probabilities);
+    setRecommendation(fallback.recommendation);
+    setPredictedRulHours(fallback.predictedRulHours);
+    setFilterIntegrityPercent(fallback.filterIntegrityPercent);
+  };
 
   // ── Health check: retry when ML was previously unavailable ───────────────
 
@@ -118,7 +127,6 @@ export function useMLFilterEstimation(): MLFilterEstimationResult {
           // Service recovered — reset state so next sensor change triggers prediction
           mlUnavailable.current = false;
           lastFeatures.current = null;
-          lastModel.current = null;
           setIsMLAvailable(true);
         }
       } catch {
@@ -150,11 +158,12 @@ export function useMLFilterEstimation(): MLFilterEstimationResult {
       ].some((v) => !isFinite(v) || isNaN(v));
 
       if (hasInvalidValue) {
-        setError("Nilai pembacaan sensor tidak valid (NaN/Infinity). Silakan periksa koneksi sensor.");
+        setIsPredicting(false);
         return;
       }
 
       if (allZero) {
+        setIsPredicting(false);
         return;
       }
 
@@ -168,43 +177,68 @@ export function useMLFilterEstimation(): MLFilterEstimationResult {
       // ── 8.3 Cache check ────────────────────────────────────────────────────
       if (
         lastFeatures.current !== null &&
-        lastModel.current === selectedModel &&
         isCacheValid(features, lastFeatures.current) &&
         !mlUnavailable.current
       ) {
-        // Sensor values and selected model haven't changed significantly — reuse cached prediction
+        return;
+      }
+
+      // When ML is offline, refresh fallback from latest filter health data
+      if (mlUnavailable.current) {
+        applyFallbackPrediction(healthPct, daysRemaining);
+        lastFeatures.current = features;
         return;
       }
 
       setIsPredicting(true);
 
       try {
-        const result = await predictFilterStatus(features, operatingHours, selectedModel);
+        const result = await predictFilterStatus(features, operatingHours, ML_MODEL);
 
-        setMlStatus(result.status);
-        setProbabilities(result.probabilities);
-        setRecommendation(result.recommendation);
-        setConfidence(result.confidence);
-        setPredictedRulHours(result.predictedRulHours);
-        setFilterIntegrityPercent(result.filterIntegrityPercent);
+        const finalIntegrity = result.filterIntegrityPercent;
+        const finalRulHours = result.predictedRulHours;
+
+        // Calculate status locally to bypass any outdated remote server-side guardrail overrides
+        let localStatus: FilterStatus = "Aman";
+        if (finalIntegrity >= 70) {
+          localStatus = "Aman";
+        } else if (finalIntegrity >= 30) {
+          localStatus = "Perhatian";
+        } else {
+          localStatus = "Bahaya";
+        }
+
+        // Calculate probabilities locally
+        const localProbabilities = getProbabilitiesFromRul(finalRulHours);
+
+        // Calculate recommendation locally
+        let localRecommendation = "";
+        if (localStatus === "Bahaya") {
+          localRecommendation = `Kondisi Ganti Filter: Sisa umur pakai filter kritis (${finalIntegrity.toFixed(0)}%). Rekomendasi: Segera ganti filter HEPA baru.`;
+        } else if (localStatus === "Perhatian") {
+          localRecommendation = `Perhatian: Kesehatan filter mulai menurun (${finalIntegrity.toFixed(0)}%). Rekomendasi: Bersihkan pra-filter dan jadwalkan penggantian HEPA dalam waktu dekat.`;
+        } else {
+          localRecommendation = "Filter berfungsi optimal berdasarkan estimasi umur pakai dan beban polutan.";
+        }
+
+        setMlStatus(localStatus);
+        setProbabilities(localProbabilities);
+        setRecommendation(localRecommendation);
+        setPredictedRulHours(finalRulHours);
+        setFilterIntegrityPercent(finalIntegrity);
         setIsMLAvailable(true);
         mlUnavailable.current = false;
-        setError(null);
 
         // Update cache after a successful prediction
         lastFeatures.current = features;
-        lastModel.current = selectedModel;
       } catch (err) {
         if (err instanceof MLServiceError) {
           if (err.code === "SERVICE_UNAVAILABLE" || err.code === "TIMEOUT") {
-            // Fallback to rule-based status when ML service is down
             mlUnavailable.current = true;
             setIsMLAvailable(false);
-            setMlStatus(getRuleBasedStatus(features));
-            setPredictedRulHours(null);
-            setFilterIntegrityPercent(null);
+            applyFallbackPrediction(healthPct, daysRemaining);
           } else if (err.code === "INVALID_INPUT") {
-            setError(err.message);
+            console.warn("[useMLFilterEstimation]", err.message);
           }
         }
       } finally {
@@ -212,11 +246,11 @@ export function useMLFilterEstimation(): MLFilterEstimationResult {
       }
     }, 2000);
 
-    // Clean up the pending timeout when sensorData or selectedModel changes or component unmounts
+    // Clean up the pending timeout when sensorData changes or component unmounts
     return () => {
       clearTimeout(timeoutId);
     };
-  }, [sensorData, selectedModel, filterStartDate]);
+  }, [sensorData, filterStartDate, healthPct, daysRemaining]);
 
   // ── 8.4 Override with ML predictions when online
   const finalHealthPct = (isMLAvailable && filterIntegrityPercent !== null)
@@ -232,10 +266,8 @@ export function useMLFilterEstimation(): MLFilterEstimationResult {
     mlStatus,
     probabilities,
     recommendation,
-    confidence,
     isMLAvailable,
     isPredicting,
-    error: error || estimationError,
 
     // Overridden or fallback estimation values
     healthPct: finalHealthPct,
@@ -245,10 +277,5 @@ export function useMLFilterEstimation(): MLFilterEstimationResult {
 
     // Rule-based fallback — always computed, never null
     ruleBasedStatus: getRuleBasedStatus(extractFeatures(sensorData)),
-
-    selectedModel,
-    setSelectedModel,
-    predictedRulHours,
-    filterIntegrityPercent,
   };
 }
