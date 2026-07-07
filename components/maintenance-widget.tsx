@@ -154,7 +154,7 @@ export function MaintenanceWidget({
         };
       case "Bahaya":
         return {
-          label: "Bahaya",
+          label: "Ganti Filter",
           styles:
             "bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-200/50 dark:border-rose-500/20 shadow-[0_0_10px_rgba(244,63,94,0.1)]",
           text: "text-rose-600 dark:text-rose-400",
@@ -182,7 +182,7 @@ export function MaintenanceWidget({
         activeBg: "bg-amber-500/5 dark:bg-amber-500/10 border-amber-500/20",
       },
       {
-        label: "Bahaya",
+        label: "Ganti Filter",
         value: probabilities.bahaya,
         icon: <AlertOctagon className="w-3.5 h-3.5 text-rose-500 shrink-0" />,
         bar: "bg-gradient-to-r from-red-500 to-rose-400 shadow-[0_0_8px_rgba(244,63,94,0.3)]",
@@ -197,7 +197,7 @@ export function MaintenanceWidget({
     const maxVal = Math.max(probabilities.aman, probabilities.perhatian, probabilities.bahaya);
     if (maxVal === probabilities.aman) return "Aman";
     if (maxVal === probabilities.perhatian) return "Perhatian";
-    return "Bahaya";
+    return "Ganti Filter";
   }, [probabilities]);
 
   return (

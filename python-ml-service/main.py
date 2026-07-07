@@ -172,34 +172,34 @@ def get_recommendation(status: str, request: PredictRequest, integrity: float) -
         if request.pm25 > 75.0:
             exceed = request.pm25 / 15.0
             return (
-                f"Kondisi BERBAHAYA: PM2.5 mencapai {request.pm25:.2f} \u03bcg/m\u00b3 "
+                f"Kondisi Ganti Filter: PM2.5 mencapai {request.pm25:.2f} \u03bcg/m\u00b3 "
                 f"({exceed:.2f}x lipat di atas batas aman harian WHO 15 \u03bcg/m\u00b3). "
                 "Rekomendasi: Gunakan masker N95, hindari aktivitas outdoor, dan atur kecepatan kipas Air Purifier ke tingkat tinggi (HIGH)."
             )
         elif request.pm10 > 150.0:
             exceed = request.pm10 / 45.0
             return (
-                f"Kondisi BERBAHAYA: PM10 mencapai {request.pm10:.2f} \u03bcg/m\u00b3 "
+                f"Kondisi Ganti Filter: PM10 mencapai {request.pm10:.2f} \u03bcg/m\u00b3 "
                 f"({exceed:.2f}x lipat di atas batas aman harian WHO 45 \u03bcg/m\u00b3). "
                 "Rekomendasi: Gunakan masker, kurangi aktivitas luar ruangan, dan nyalakan Air Purifier pada tingkat maksimum."
             )
         elif request.co > 9.0:
             exceed = request.co / 9.0
             return (
-                f"Kondisi BERBAHAYA: Kadar CO mencapai {request.co:.2f} ppm "
+                f"Kondisi Ganti Filter: Kadar CO mencapai {request.co:.2f} ppm "
                 f"({exceed:.2f}x lipat di atas batas aman harian WHO 9 ppm). "
                 "Rekomendasi: Segera buka ventilasi ruangan, matikan sumber gas, dan gunakan masker jika diperlukan."
             )
         elif request.voc > 1.0:
             exceed = request.voc / 1.0
             return (
-                f"Kondisi BERBAHAYA: Kadar VOC mencapai {request.voc:.2f} mg/m\u00b3 "
+                f"Kondisi Ganti Filter: Kadar VOC mencapai {request.voc:.2f} mg/m\u00b3 "
                 f"({exceed:.2f}x lipat di atas batas aman harian 1.0 mg/m\u00b3). "
                 "Rekomendasi: Pastikan sirkulasi udara luar lancar dan gunakan pembersih udara dengan karbon aktif."
             )
         if integrity < 30.0:
-            return f"Kondisi BERBAHAYA: Sisa umur pakai filter habis ({integrity:.2f}%). Rekomendasi: Segera ganti filter HEPA baru."
-        return "Kondisi BERBAHAYA: Beberapa parameter kualitas udara melebihi ambang batas keselamatan kritis."
+            return f"Kondisi Ganti Filter: Sisa umur pakai filter habis ({integrity:.2f}%). Rekomendasi: Segera ganti filter HEPA baru."
+        return "Kondisi Ganti Filter: Beberapa parameter kualitas udara melebihi ambang batas keselamatan kritis."
 
     if status == "Perhatian":
         if 30.0 <= integrity < 70.0:
