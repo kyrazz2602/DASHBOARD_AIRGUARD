@@ -417,7 +417,7 @@ export function MaintenanceWidget({
           )}
 
           {/* Probability bars */}
-          {hasPredictionData && (
+          {hasPredictionData && probabilityBars && (
             <div className="space-y-2">
               {probabilityBars.map((bar) => {
                 const isDominant = dominantLabel === bar.label && bar.value > 0;
