@@ -68,7 +68,7 @@ export function MaintenanceWidget({
     if (filterHealth >= 70) {
       return {
         icon: <CheckCircle2 className="w-4 h-4" />,
-        label: "Aman",
+        label: "Filter Optimal",
         sublabel: "Berfungsi dengan baik",
         styles: {
           icon: "text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-500/20 shadow-sm shadow-emerald-500/5",
