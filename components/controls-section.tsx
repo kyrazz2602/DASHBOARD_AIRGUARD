@@ -36,6 +36,8 @@ import {
   listenToWifiStatus,
   listenToDetectedWifis,
   triggerWifiScan,
+  clearWifiStatus,
+  getWifiCommandTimestamp,
 } from "@/lib/firebase-data";
 import {
   Select,
@@ -116,16 +118,52 @@ export function ControlsSection({
   const [isScanning, setIsScanning] = useState(false);
 
   useEffect(() => {
+    // Bersihkan status stale jika perintah wifi terakhir sudah > 30 detik lalu
+    const checkStaleStatus = async () => {
+      try {
+        const lastUpdated = await getWifiCommandTimestamp();
+        const now = Date.now();
+        if (now - lastUpdated > 30000) {
+          await clearWifiStatus();
+        }
+      } catch (err) {
+        console.error("Failed to check stale wifi status:", err);
+      }
+    };
+    checkStaleStatus();
+
     const unsubscribe = listenToWifiStatus((status) => {
       setWifiStatus(status);
       if (status.wifiStatus === "Connecting...") {
         setIsWifiConnecting(true);
-      } else if (status.wifiStatus !== "") {
+      } else {
         setIsWifiConnecting(false);
       }
     });
     return unsubscribe;
   }, []);
+
+  // Efek untuk mengelola timeout koneksi WiFi selama 30 detik
+  useEffect(() => {
+    if (isWifiConnecting) {
+      const timer = setTimeout(async () => {
+        setIsWifiConnecting(false);
+        setWifiStatus((prev) => ({
+          ...prev,
+          wifiStatus: "",
+          wifiError: "Tidak ada respon dari Orange Pi. Pastikan script python bridge di Orange Pi sedang berjalan.",
+        }));
+        // Bersihkan status di Firebase agar tidak stuck
+        try {
+          await clearWifiStatus();
+        } catch (err) {
+          console.error("Failed to auto-clear wifi status on timeout:", err);
+        }
+      }, 30000);
+
+      return () => clearTimeout(timer);
+    }
+  }, [isWifiConnecting]);
 
   useEffect(() => {
     const unsubscribe = listenToDetectedWifis((wifis) => {
@@ -164,19 +202,6 @@ export function ControlsSection({
     setIsWifiConnecting(true);
     try {
       await triggerWifiChange(wifiSsid, wifiPassword);
-      // Fallback timeout: Jika Orange Pi tidak merespon dalam 30 detik
-      setTimeout(() => {
-        setIsWifiConnecting((prev) => {
-          if (prev) {
-            setWifiStatus((status) => ({
-              ...status,
-              wifiError: "Tidak ada respon dari Orange Pi. Pastikan script python bridge di Orange Pi sedang berjalan.",
-            }));
-            return false;
-          }
-          return prev;
-        });
-      }, 30000);
     } catch (err) {
       console.error("Failed to connect WiFi:", err);
       setIsWifiConnecting(false);

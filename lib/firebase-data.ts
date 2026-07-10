@@ -728,6 +728,33 @@ export function listenToWifiStatus(
 }
 
 /**
+ * Membersihkan/reset status WiFi di Firebase (/Status/wifi_status dan /Status/wifi_error)
+ */
+export async function clearWifiStatus(): Promise<void> {
+  if (!isDbReady()) return;
+  const statusRef = ref(database, STATUS_PATH);
+  await update(statusRef, {
+    wifi_status: "",
+    wifi_error: "",
+  });
+}
+
+/**
+ * Mendapatkan timestamp pembaruan perintah WiFi terakhir dari /Command/wifi/updatedAt
+ */
+export async function getWifiCommandTimestamp(): Promise<number> {
+  if (!isDbReady()) return 0;
+  const wifiRef = ref(database, `${COMMAND_PATH}/wifi`);
+  const snapshot = await get(wifiRef);
+  if (snapshot.exists()) {
+    const data = snapshot.val();
+    return data.updatedAt || 0;
+  }
+  return 0;
+}
+
+
+/**
  * Mendengarkan daftar SSID WiFi yang terdeteksi oleh Orange Pi dari /Status/detected_wifis
  */
 export function listenToDetectedWifis(
