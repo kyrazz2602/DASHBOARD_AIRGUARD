@@ -13,7 +13,6 @@ import {
   listenToRobotPose,
 } from "@/lib/firebase-data";
 import type { MapGridData, ScanPointsData, MapPathData, RobotPose } from "@/lib/firebase-data";
-
 const C = {
   bg: "#0B0E14",
   bgAlt: "#0D1117",
@@ -382,6 +381,10 @@ export function MapPlanningModal({ isOpen, onClose, onSwitchToManual }: MapPlann
     }
   };
 
+
+
+
+
   // ═══════════════════════════════════════════════════════════════════════════
   // FIREBASE FALLBACK: Subscribe to map data from Firebase when ROSBridge
   // is not connected. This enables real-time mapping from anywhere.
@@ -542,6 +545,7 @@ export function MapPlanningModal({ isOpen, onClose, onSwitchToManual }: MapPlann
       unsubPose();
     };
   }, [isOpen, connStatus]);
+
 
   // Subscribe to device status (Firebase) for position fallback and navigation status
   useEffect(() => {
