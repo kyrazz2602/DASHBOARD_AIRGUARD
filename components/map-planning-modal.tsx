@@ -817,19 +817,16 @@ export function MapPlanningModal({ isOpen, onClose, onSwitchToManual }: MapPlann
         }
         setIsInstructionsOpen(false);
       }
-    } else {
-      disconnectRos();
-      setSelectedPoint(null);
-      setSentStatus("idle");
-      setNavStatus("IDLE");
-      setMapSource("none");
-      offscreenCanvasRef.current = null;
-      mapMetadataRef.current = null;
     }
+  }, [isOpen]);
+
+  // Clean up ROS connection only when component unmounts
+  useEffect(() => {
     return () => {
       disconnectRos();
     };
-  }, [isOpen]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   if (!isOpen) return null;
 
