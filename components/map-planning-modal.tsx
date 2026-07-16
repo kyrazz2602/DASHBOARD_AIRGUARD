@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { MapPin, X, Navigation, RefreshCw, Wifi, WifiOff, Radio, CheckCircle2, XCircle, Loader2 } from "lucide-react";
+import { MapPin, X, Navigation, RefreshCw, Wifi, WifiOff, Radio, CheckCircle2, XCircle, Loader2, Plus, Minus, Maximize } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   sendNavGoal,
@@ -11,19 +11,19 @@ import {
   listenToScanPoints,
   listenToMapPath,
   listenToRobotPose,
-  listenToSavedMaps,
-  listenToMapAction,
-  triggerMapAction,
-  resetMapAction,
 } from "@/lib/firebase-data";
-import type { MapGridData, ScanPointsData, MapPathData, RobotPose, SavedMap, MapActionState } from "@/lib/firebase-data";
-
+import type { MapGridData, ScanPointsData, MapPathData, RobotPose } from "@/lib/firebase-data";
 const C = {
   bg: "#0B0E14",
   bgAlt: "#0D1117",
   fill: "#152238",
   neon: "#00F2FF",
   redNeon: "#FF0055",
+  // Map cell palette
+  mapFree: [11, 14, 20],        // Dark (explored free space)
+  mapObstacle: [56, 189, 248],  // Cyan (walls/obstacles)
+  mapUnknown: [21, 28, 38],     // Dark blue (unexplored)
+  mapBorder: [0, 229, 255],     // Neon cyan (frontier edge)
 } as const;
 
 interface MapPlanningModalProps {
@@ -45,14 +45,6 @@ export function MapPlanningModal({ isOpen, onClose, onSwitchToManual }: MapPlann
 
   // Navigation status from Firebase
   const [navStatus, setNavStatus] = useState<string>("IDLE");
-
-  // Save & Load Map states
-  const [savedMaps, setSavedMaps] = useState<SavedMap[]>([]);
-  const [newMapName, setNewMapName] = useState("");
-  const [mapActionState, setMapActionState] = useState<MapActionState>({ action: "IDLE", status: "IDLE" });
-  const [isSavingMap, setIsSavingMap] = useState(false);
-  const [saveStatus, setSaveStatus] = useState<"idle" | "success" | "error">("idle");
-  const [loadingMapId, setLoadingMapId] = useState<string | null>(null);
 
   // Sync selectedPoint to input fields
   useEffect(() => {
@@ -110,7 +102,7 @@ export function MapPlanningModal({ isOpen, onClose, onSwitchToManual }: MapPlann
   // ROS Connection State
   const [wsUrl, setWsUrl] = useState("ws://192.168.1.10:9090");
   const [connStatus, setConnStatus] = useState<"disconnected" | "connecting" | "connected">("disconnected");
-  const [bounds, setBounds] = useState({ minX: -5.0, maxX: 5.0, minY: -5.0, maxY: 5.0 });
+  const [bounds, setBounds] = useState({ minX: -10.0, maxX: 10.0, minY: -10.0, maxY: 10.0 });
 
   // Data source indicator
   const [mapSource, setMapSource] = useState<"none" | "firebase" | "rosbridge">("none");
@@ -123,6 +115,15 @@ export function MapPlanningModal({ isOpen, onClose, onSwitchToManual }: MapPlann
   const poseRef = useRef<{ x: number; y: number; yaw: number } | null>(null);
   const scansRef = useRef<{ x: number; y: number }[]>([]);
   const pathRef = useRef<{ x: number; y: number }[]>([]);
+  const mapMetadataRef = useRef<{ minX: number; maxX: number; minY: number; maxY: number } | null>(null);
+
+  // Zoom & Pan state (camera transform)
+  const zoomRef = useRef(1.0);          // zoom level (1 = fit view)
+  const panRef = useRef({ x: 0, y: 0 }); // pan offset in canvas pixels
+  const isPanningRef = useRef(false);
+  const panStartRef = useRef({ x: 0, y: 0 });
+  const panStartOffsetRef = useRef({ x: 0, y: 0 });
+  const hasAutoFittedRef = useRef(false);
 
   // ROS Subscription Refs
   const rosInstanceRef = useRef<any>(null);
@@ -139,6 +140,11 @@ export function MapPlanningModal({ isOpen, onClose, onSwitchToManual }: MapPlann
   useEffect(() => {
     selectedPointRef.current = selectedPoint;
   }, [selectedPoint]);
+
+  const connStatusRef = useRef(connStatus);
+  useEffect(() => {
+    connStatusRef.current = connStatus;
+  }, [connStatus]);
 
   // WebSocket Connection Handlers
   const disconnectRos = () => {
@@ -167,10 +173,15 @@ export function MapPlanningModal({ isOpen, onClose, onSwitchToManual }: MapPlann
     scansRef.current = [];
     pathRef.current = [];
     offscreenCanvasRef.current = null;
+    mapMetadataRef.current = null;
     
-    setBounds({ minX: -5.0, maxX: 5.0, minY: -5.0, maxY: 5.0 });
+    setBounds({ minX: -10.0, maxX: 10.0, minY: -10.0, maxY: 10.0 });
     setConnStatus("disconnected");
     setMapSource((prev) => prev === "rosbridge" ? "none" : prev);
+    // Reset zoom/pan
+    zoomRef.current = 1.0;
+    panRef.current = { x: 0, y: 0 };
+    hasAutoFittedRef.current = false;
   };
 
   const connectRos = async () => {
@@ -200,7 +211,7 @@ export function MapPlanningModal({ isOpen, onClose, onSwitchToManual }: MapPlann
           const minY = origin.position.y;
           const maxY = minY + height * resolution;
           
-          setBounds({ minX, maxX, minY, maxY });
+          mapMetadataRef.current = { minX, maxX, minY, maxY };
 
           // Render map on offscreen canvas
           if (!offscreenCanvasRef.current) {
@@ -212,27 +223,77 @@ export function MapPlanningModal({ isOpen, onClose, onSwitchToManual }: MapPlann
           const ctx = offCanvas.getContext("2d");
           if (ctx) {
             const imgData = ctx.createImageData(width, height);
-            for (let i = 0; i < message.data.length; i++) {
-              const val = message.data[i];
+            const data = message.data;
+
+            const isUnexplored = (r: number, c: number) => {
+              if (r < 0 || r >= height || c < 0 || c >= width) return true;
+              return data[r * width + c] === -1;
+            };
+
+            const isFreeSpace = (r: number, c: number) => {
+              if (r < 0 || r >= height || c < 0 || c >= width) return false;
+              const val = data[r * width + c];
+              return val !== -1 && val < 50;
+            };
+
+            const isBoundary = (r: number, c: number) => {
+              if (!isFreeSpace(r, c)) return false;
+              // Check all 8 neighbors to ensure the boundary line is fully connected diagonally
+              return isUnexplored(r - 1, c) || 
+                     isUnexplored(r + 1, c) || 
+                     isUnexplored(r, c - 1) || 
+                     isUnexplored(r, c + 1) ||
+                     isUnexplored(r - 1, c - 1) ||
+                     isUnexplored(r - 1, c + 1) ||
+                     isUnexplored(r + 1, c - 1) ||
+                     isUnexplored(r + 1, c + 1);
+            };
+
+            const isOccupied = (r: number, c: number) => {
+              if (r < 0 || r >= height || c < 0 || c >= width) return false;
+              return data[r * width + c] >= 65;
+            };
+
+            const hasOccupiedNeighbor = (r: number, c: number) => {
+              for (let dr = -1; dr <= 1; dr++) {
+                for (let dc = -1; dc <= 1; dc++) {
+                  if (dr === 0 && dc === 0) continue;
+                  if (isOccupied(r + dr, c + dc)) return true;
+                }
+              }
+              return false;
+            };
+
+            for (let i = 0; i < data.length; i++) {
+              const val = data[i];
               const col = i % width;
               const row = Math.floor(i / width);
               const flippedRow = height - 1 - row;
               const destIndex = (flippedRow * width + col) * 4;
 
               if (val === -1) {
-                imgData.data[destIndex] = 21;
-                imgData.data[destIndex + 1] = 28;
-                imgData.data[destIndex + 2] = 38;
+                // Unknown / Unexplored — medium gray
+                imgData.data[destIndex] = C.mapUnknown[0];
+                imgData.data[destIndex + 1] = C.mapUnknown[1];
+                imgData.data[destIndex + 2] = C.mapUnknown[2];
                 imgData.data[destIndex + 3] = 255;
-              } else if (val >= 50) {
-                imgData.data[destIndex] = 56;
-                imgData.data[destIndex + 1] = 189;
-                imgData.data[destIndex + 2] = 248;
+              } else if (val >= 65 && hasOccupiedNeighbor(row, col)) {
+                // Obstacle / Wall — near-black
+                imgData.data[destIndex] = C.mapObstacle[0];
+                imgData.data[destIndex + 1] = C.mapObstacle[1];
+                imgData.data[destIndex + 2] = C.mapObstacle[2];
+                imgData.data[destIndex + 3] = 255;
+              } else if (isBoundary(row, col)) {
+                // Frontier border — subtle steel blue
+                imgData.data[destIndex] = C.mapBorder[0];
+                imgData.data[destIndex + 1] = C.mapBorder[1];
+                imgData.data[destIndex + 2] = C.mapBorder[2];
                 imgData.data[destIndex + 3] = 255;
               } else {
-                imgData.data[destIndex] = 11;
-                imgData.data[destIndex + 1] = 14;
-                imgData.data[destIndex + 2] = 20;
+                // Free space — light gray
+                imgData.data[destIndex] = C.mapFree[0];
+                imgData.data[destIndex + 1] = C.mapFree[1];
+                imgData.data[destIndex + 2] = C.mapFree[2];
                 imgData.data[destIndex + 3] = 255;
               }
             }
@@ -320,6 +381,10 @@ export function MapPlanningModal({ isOpen, onClose, onSwitchToManual }: MapPlann
     }
   };
 
+
+
+
+
   // ═══════════════════════════════════════════════════════════════════════════
   // FIREBASE FALLBACK: Subscribe to map data from Firebase when ROSBridge
   // is not connected. This enables real-time mapping from anywhere.
@@ -333,6 +398,7 @@ export function MapPlanningModal({ isOpen, onClose, onSwitchToManual }: MapPlann
     // Subscribe to Firebase map grid data
     const unsubGrid = listenToMapGrid(
       (gridData: MapGridData) => {
+        if (connStatusRef.current === "connected") return;
         setMapSource("firebase");
         const { width, height, resolution, origin_x, origin_y, data_b64 } = gridData;
 
@@ -341,7 +407,7 @@ export function MapPlanningModal({ isOpen, onClose, onSwitchToManual }: MapPlann
         const maxX = origin_x + width * resolution;
         const minY = origin_y;
         const maxY = origin_y + height * resolution;
-        setBounds({ minX, maxX, minY, maxY });
+        mapMetadataRef.current = { minX, maxX, minY, maxY };
 
         // Decode base64 occupancy grid and render to offscreen canvas
         try {
@@ -360,6 +426,48 @@ export function MapPlanningModal({ isOpen, onClose, onSwitchToManual }: MapPlann
           const ctx = offCanvas.getContext("2d");
           if (ctx) {
             const imgData = ctx.createImageData(width, height);
+
+            const getVal = (r: number, c: number) => {
+              if (r < 0 || r >= height || c < 0 || c >= width) return -1;
+              return cells[r * width + c] - 128;
+            };
+
+            const isUnexplored = (r: number, c: number) => {
+              return getVal(r, c) === -1;
+            };
+
+            const isFreeSpace = (r: number, c: number) => {
+              const val = getVal(r, c);
+              return val !== -1 && val < 50;
+            };
+
+            const isBoundary = (r: number, c: number) => {
+              if (!isFreeSpace(r, c)) return false;
+              // Check all 8 neighbors to ensure the boundary line is fully connected diagonally
+              return isUnexplored(r - 1, c) || 
+                     isUnexplored(r + 1, c) || 
+                     isUnexplored(r, c - 1) || 
+                     isUnexplored(r, c + 1) ||
+                     isUnexplored(r - 1, c - 1) ||
+                     isUnexplored(r - 1, c + 1) ||
+                     isUnexplored(r + 1, c - 1) ||
+                     isUnexplored(r + 1, c + 1);
+            };
+
+            const isOccupied = (r: number, c: number) => {
+              return getVal(r, c) >= 65;
+            };
+
+            const hasOccupiedNeighbor = (r: number, c: number) => {
+              for (let dr = -1; dr <= 1; dr++) {
+                for (let dc = -1; dc <= 1; dc++) {
+                  if (dr === 0 && dc === 0) continue;
+                  if (isOccupied(r + dr, c + dc)) return true;
+                }
+              }
+              return false;
+            };
+
             for (let i = 0; i < cells.length; i++) {
               // Reverse the encoding: stored as (val + 128), so val = stored - 128
               const val = cells[i] - 128;
@@ -369,19 +477,28 @@ export function MapPlanningModal({ isOpen, onClose, onSwitchToManual }: MapPlann
               const destIndex = (flippedRow * width + col) * 4;
 
               if (val === -1) {
-                imgData.data[destIndex] = 21;
-                imgData.data[destIndex + 1] = 28;
-                imgData.data[destIndex + 2] = 38;
+                // Unknown / Unexplored — medium gray
+                imgData.data[destIndex] = C.mapUnknown[0];
+                imgData.data[destIndex + 1] = C.mapUnknown[1];
+                imgData.data[destIndex + 2] = C.mapUnknown[2];
                 imgData.data[destIndex + 3] = 255;
-              } else if (val >= 50) {
-                imgData.data[destIndex] = 56;
-                imgData.data[destIndex + 1] = 189;
-                imgData.data[destIndex + 2] = 248;
+              } else if (val >= 65 && hasOccupiedNeighbor(row, col)) {
+                // Obstacle / Wall — near-black
+                imgData.data[destIndex] = C.mapObstacle[0];
+                imgData.data[destIndex + 1] = C.mapObstacle[1];
+                imgData.data[destIndex + 2] = C.mapObstacle[2];
+                imgData.data[destIndex + 3] = 255;
+              } else if (isBoundary(row, col)) {
+                // Frontier border — subtle steel blue
+                imgData.data[destIndex] = C.mapBorder[0];
+                imgData.data[destIndex + 1] = C.mapBorder[1];
+                imgData.data[destIndex + 2] = C.mapBorder[2];
                 imgData.data[destIndex + 3] = 255;
               } else {
-                imgData.data[destIndex] = 11;
-                imgData.data[destIndex + 1] = 14;
-                imgData.data[destIndex + 2] = 20;
+                // Free space — light gray
+                imgData.data[destIndex] = C.mapFree[0];
+                imgData.data[destIndex + 1] = C.mapFree[1];
+                imgData.data[destIndex + 2] = C.mapFree[2];
                 imgData.data[destIndex + 3] = 255;
               }
             }
@@ -397,6 +514,7 @@ export function MapPlanningModal({ isOpen, onClose, onSwitchToManual }: MapPlann
     // Subscribe to Firebase scan points
     const unsubScan = listenToScanPoints(
       (data: ScanPointsData) => {
+        if (connStatusRef.current === "connected") return;
         scansRef.current = data.points;
       },
       (error) => console.error("[Firebase Scan Points] error:", error)
@@ -405,6 +523,7 @@ export function MapPlanningModal({ isOpen, onClose, onSwitchToManual }: MapPlann
     // Subscribe to Firebase A* path
     const unsubPath = listenToMapPath(
       (data: MapPathData) => {
+        if (connStatusRef.current === "connected") return;
         pathRef.current = data.points;
       },
       (error) => console.error("[Firebase Map Path] error:", error)
@@ -413,6 +532,7 @@ export function MapPlanningModal({ isOpen, onClose, onSwitchToManual }: MapPlann
     // Subscribe to Firebase robot pose
     const unsubPose = listenToRobotPose(
       (pose: RobotPose) => {
+        if (connStatusRef.current === "connected") return;
         poseRef.current = { x: pose.x, y: pose.y, yaw: pose.yaw };
       },
       (error) => console.error("[Firebase Robot Pose] error:", error)
@@ -426,6 +546,7 @@ export function MapPlanningModal({ isOpen, onClose, onSwitchToManual }: MapPlann
     };
   }, [isOpen, connStatus]);
 
+
   // Subscribe to device status (Firebase) for position fallback and navigation status
   useEffect(() => {
     const unsubscribeStatus = listenToDeviceStatus(
@@ -436,8 +557,7 @@ export function MapPlanningModal({ isOpen, onClose, onSwitchToManual }: MapPlann
         }
 
         // Fallback to Firebase status values if not connected via websocket
-        // and no pose from Map/robot_pose
-        if (connStatus !== "connected" && !poseRef.current) {
+        if (connStatusRef.current !== "connected") {
           if (status.x !== undefined && status.y !== undefined && status.yaw !== undefined) {
             poseRef.current = {
               x: status.x,
@@ -455,7 +575,7 @@ export function MapPlanningModal({ isOpen, onClose, onSwitchToManual }: MapPlann
     return () => {
       unsubscribeStatus();
     };
-  }, [connStatus]);
+  }, []);
 
   // Canvas drawing loop
   useEffect(() => {
@@ -473,120 +593,108 @@ export function MapPlanningModal({ isOpen, onClose, onSwitchToManual }: MapPlann
         return;
       }
 
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      // HiDPI support
+      const dpr = window.devicePixelRatio || 1;
+      const displayWidth = canvas.clientWidth;
+      const displayHeight = canvas.clientHeight;
+      if (canvas.width !== displayWidth * dpr || canvas.height !== displayHeight * dpr) {
+        canvas.width = displayWidth * dpr;
+        canvas.height = displayHeight * dpr;
+      }
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      const W = displayWidth;
+      const H = displayHeight;
+
+      ctx.fillStyle = C.bg;
+      ctx.fillRect(0, 0, W, H);
       const b = boundsRef.current;
+      const zoom = zoomRef.current;
+      const pan = panRef.current;
 
       const mapToCanvas = (mx: number, my: number) => {
         const pctX = (mx - b.minX) / (b.maxX - b.minX);
         const pctY = (my - b.minY) / (b.maxY - b.minY);
         return {
-          x: pctX * canvas.width,
-          y: (1 - pctY) * canvas.height,
+          x: pctX * W * zoom + pan.x,
+          y: (1 - pctY) * H * zoom + pan.y,
         };
       };
 
-      // 1. Draw Map Background
-      if (offscreenCanvasRef.current) {
+      // 1. Draw Map Background (RViz-style)
+      if (offscreenCanvasRef.current && mapMetadataRef.current) {
+        const meta = mapMetadataRef.current;
+        const topLeft = mapToCanvas(meta.minX, meta.maxY);
+        const bottomRight = mapToCanvas(meta.maxX, meta.minY);
+
         ctx.save();
         ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(offscreenCanvasRef.current, 0, 0, canvas.width, canvas.height);
+        ctx.drawImage(
+          offscreenCanvasRef.current,
+          topLeft.x,
+          topLeft.y,
+          bottomRight.x - topLeft.x,
+          bottomRight.y - topLeft.y
+        );
         ctx.restore();
-
-        ctx.strokeStyle = "rgba(0, 242, 255, 0.03)";
-        ctx.lineWidth = 1;
-        const gridCount = 20;
-        for (let i = 0; i <= gridCount; i++) {
-          ctx.beginPath();
-          ctx.moveTo((i / gridCount) * canvas.width, 0);
-          ctx.lineTo((i / gridCount) * canvas.width, canvas.height);
-          ctx.stroke();
-          ctx.beginPath();
-          ctx.moveTo(0, (i / gridCount) * canvas.height);
-          ctx.lineTo(canvas.width, (i / gridCount) * canvas.height);
-          ctx.stroke();
-        }
-      } else {
-        ctx.fillStyle = C.bg;
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-        ctx.strokeStyle = "rgba(0, 242, 255, 0.05)";
-        ctx.lineWidth = 1;
-        const gridCount = 10;
-        for (let i = 0; i <= gridCount; i++) {
-          ctx.beginPath();
-          ctx.moveTo((i / gridCount) * canvas.width, 0);
-          ctx.lineTo((i / gridCount) * canvas.width, canvas.height);
-          ctx.stroke();
-          ctx.beginPath();
-          ctx.moveTo(0, (i / gridCount) * canvas.height);
-          ctx.lineTo(canvas.width, (i / gridCount) * canvas.height);
-          ctx.stroke();
-        }
-
-        ctx.strokeStyle = "rgba(148, 163, 184, 0.25)";
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.moveTo(canvas.width / 2, 0);
-        ctx.lineTo(canvas.width / 2, canvas.height);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(0, canvas.height / 2);
-        ctx.lineTo(canvas.width, canvas.height / 2);
-        ctx.stroke();
       }
 
-      // Meter grid lines and labels
+      // Subtle meter grid overlay
       ctx.save();
       ctx.font = "bold 9px monospace";
-      ctx.fillStyle = "rgba(148, 163, 184, 0.7)";
-      ctx.textAlign = "center";
       ctx.textBaseline = "middle";
 
       for (let x = Math.ceil(b.minX); x <= Math.floor(b.maxX); x++) {
-        if (x === 0) continue;
         const ptCanvas = mapToCanvas(x, 0);
-        ctx.strokeStyle = "rgba(0, 242, 255, 0.08)";
-        ctx.lineWidth = 0.5;
+        ctx.strokeStyle = x === 0 ? "rgba(0, 242, 255, 0.15)" : "rgba(0, 242, 255, 0.06)";
+        ctx.lineWidth = x === 0 ? 1 : 0.5;
         ctx.beginPath();
         ctx.moveTo(ptCanvas.x, 0);
         ctx.lineTo(ptCanvas.x, canvas.height);
         ctx.stroke();
-        ctx.fillText(`${x > 0 ? "+" : ""}${x}m`, ptCanvas.x, canvas.height - 18);
+        if (x !== 0) {
+          ctx.fillStyle = "rgba(148, 163, 184, 0.6)";
+          ctx.textAlign = "center";
+          ctx.fillText(`${x}m`, ptCanvas.x, canvas.height - 14);
+        }
       }
 
-      ctx.textAlign = "left";
       for (let y = Math.ceil(b.minY); y <= Math.floor(b.maxY); y++) {
-        if (y === 0) continue;
         const ptCanvas = mapToCanvas(0, y);
-        ctx.strokeStyle = "rgba(0, 242, 255, 0.08)";
-        ctx.lineWidth = 0.5;
+        ctx.strokeStyle = y === 0 ? "rgba(0, 242, 255, 0.15)" : "rgba(0, 242, 255, 0.06)";
+        ctx.lineWidth = y === 0 ? 1 : 0.5;
         ctx.beginPath();
         ctx.moveTo(0, ptCanvas.y);
         ctx.lineTo(canvas.width, ptCanvas.y);
         ctx.stroke();
-        ctx.fillText(`${y > 0 ? "+" : ""}${y}m`, 8, ptCanvas.y);
+        if (y !== 0) {
+          ctx.fillStyle = "rgba(148, 163, 184, 0.6)";
+          ctx.textAlign = "left";
+          ctx.fillText(`${y}m`, 6, ptCanvas.y);
+        }
       }
       ctx.restore();
-
       // 2. Origin axes
       const originCanvas = mapToCanvas(0, 0);
       if (originCanvas.x >= 0 && originCanvas.x <= canvas.width && originCanvas.y >= 0 && originCanvas.y <= canvas.height) {
         ctx.save();
+        // X axis (Red)
         ctx.strokeStyle = "#FF0055";
-        ctx.lineWidth = 2.5;
+        ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.moveTo(originCanvas.x, originCanvas.y);
-        ctx.lineTo(originCanvas.x + 22, originCanvas.y);
+        ctx.lineTo(originCanvas.x + 24, originCanvas.y);
         ctx.stroke();
+        // Y axis (Green)
         ctx.strokeStyle = "#10B981";
-        ctx.lineWidth = 2.5;
+        ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.moveTo(originCanvas.x, originCanvas.y);
-        ctx.lineTo(originCanvas.x, originCanvas.y - 22);
+        ctx.lineTo(originCanvas.x, originCanvas.y - 24);
         ctx.stroke();
+        // Origin dot
         ctx.fillStyle = "#ffffff";
         ctx.beginPath();
-        ctx.arc(originCanvas.x, originCanvas.y, 2.5, 0, Math.PI * 2);
+        ctx.arc(originCanvas.x, originCanvas.y, 2, 0, Math.PI * 2);
         ctx.fill();
         ctx.restore();
       }
@@ -595,10 +703,10 @@ export function MapPlanningModal({ isOpen, onClose, onSwitchToManual }: MapPlann
       const path = pathRef.current;
       if (path && path.length > 0) {
         ctx.save();
-        ctx.shadowColor = "#00F2FF";
-        ctx.shadowBlur = 6;
         ctx.strokeStyle = "#00F2FF";
-        ctx.lineWidth = 2.5;
+        ctx.lineWidth = 2;
+        ctx.lineJoin = "round";
+        ctx.lineCap = "round";
         ctx.setLineDash([6, 4]);
         ctx.beginPath();
         let first = true;
@@ -613,7 +721,6 @@ export function MapPlanningModal({ isOpen, onClose, onSwitchToManual }: MapPlann
         }
         ctx.stroke();
         ctx.setLineDash([]);
-        ctx.shadowBlur = 0;
 
         // Path endpoint marker
         if (path.length > 0) {
@@ -631,13 +738,9 @@ export function MapPlanningModal({ isOpen, onClose, onSwitchToManual }: MapPlann
       if (scans && scans.length > 0) {
         ctx.save();
         ctx.fillStyle = "#FF0055";
-        ctx.shadowColor = "#FF0055";
-        ctx.shadowBlur = 4;
         for (const pt of scans) {
           const cPt = mapToCanvas(pt.x, pt.y);
-          ctx.beginPath();
-          ctx.arc(cPt.x, cPt.y, 2, 0, Math.PI * 2);
-          ctx.fill();
+          ctx.fillRect(cPt.x - 1, cPt.y - 1, 2, 2);
         }
         ctx.restore();
       }
@@ -649,48 +752,56 @@ export function MapPlanningModal({ isOpen, onClose, onSwitchToManual }: MapPlann
         ctx.save();
         ctx.translate(cPose.x, cPose.y);
         ctx.rotate(-pose.yaw);
+        // Arrow body
         ctx.fillStyle = "#00F2FF";
         ctx.strokeStyle = "#ffffff";
         ctx.lineWidth = 1.5;
         ctx.beginPath();
-        ctx.moveTo(11, 0);
-        ctx.lineTo(-9, -7);
-        ctx.lineTo(-6, 0);
-        ctx.lineTo(-9, 7);
+        ctx.moveTo(12, 0);
+        ctx.lineTo(-8, -7);
+        ctx.lineTo(-5, 0);
+        ctx.lineTo(-8, 7);
         ctx.closePath();
         ctx.fill();
-        ctx.stroke();
-        ctx.shadowColor = "#00F2FF";
-        ctx.shadowBlur = 8;
-        ctx.strokeStyle = "rgba(0, 242, 255, 0.45)";
-        ctx.beginPath();
-        ctx.arc(0, 0, 11, 0, Math.PI * 2);
         ctx.stroke();
         ctx.restore();
       }
 
-      // 6. Selected Target Pin
+      // 6. Selected Target Pin (clean crosshair)
       const selected = selectedPointRef.current;
       if (selected) {
         const cTarget = mapToCanvas(selected.x, selected.y);
         ctx.save();
+        // Outer pulsing ring
+        const pulse = 1 + Math.sin(Date.now() / 200) * 0.12;
+        ctx.strokeStyle = "rgba(255, 0, 85, 0.5)";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(cTarget.x, cTarget.y, 10 * pulse, 0, Math.PI * 2);
+        ctx.stroke();
+        // Inner solid ring
         ctx.strokeStyle = "#FF0055";
         ctx.lineWidth = 2;
-        const pulse = 1 + Math.sin(Date.now() / 150) * 0.15;
         ctx.beginPath();
-        ctx.arc(cTarget.x, cTarget.y, 8 * pulse, 0, Math.PI * 2);
+        ctx.arc(cTarget.x, cTarget.y, 5, 0, Math.PI * 2);
         ctx.stroke();
+        // Center dot
         ctx.fillStyle = "#FF0055";
         ctx.beginPath();
-        ctx.arc(cTarget.x, cTarget.y, 3, 0, Math.PI * 2);
+        ctx.arc(cTarget.x, cTarget.y, 2, 0, Math.PI * 2);
         ctx.fill();
-        ctx.strokeStyle = "rgba(255, 0, 85, 0.5)";
-        ctx.lineWidth = 1.2;
+        // Crosshair lines
+        ctx.strokeStyle = "rgba(255, 0, 85, 0.4)";
+        ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.moveTo(cTarget.x - 12, cTarget.y);
-        ctx.lineTo(cTarget.x + 12, cTarget.y);
-        ctx.moveTo(cTarget.x, cTarget.y - 12);
-        ctx.lineTo(cTarget.x, cTarget.y + 12);
+        ctx.moveTo(cTarget.x - 16, cTarget.y);
+        ctx.lineTo(cTarget.x - 7, cTarget.y);
+        ctx.moveTo(cTarget.x + 7, cTarget.y);
+        ctx.lineTo(cTarget.x + 16, cTarget.y);
+        ctx.moveTo(cTarget.x, cTarget.y - 16);
+        ctx.lineTo(cTarget.x, cTarget.y - 7);
+        ctx.moveTo(cTarget.x, cTarget.y + 7);
+        ctx.lineTo(cTarget.x, cTarget.y + 16);
         ctx.stroke();
         ctx.restore();
       }
@@ -704,13 +815,13 @@ export function MapPlanningModal({ isOpen, onClose, onSwitchToManual }: MapPlann
     };
   }, []);
 
-  // Track previous isOpen to distinguish initial mount from explicit close
-  const prevIsOpenRef = useRef(false);
-
-  // Load cached ws URL on modal open, clean up on explicit close
+  // Set autonomous mode and load cached ws URL on modal open
   useEffect(() => {
     if (isOpen) {
-      prevIsOpenRef.current = true;
+      setNavigationMode(true).catch((err) => {
+        console.error("[MapPlanning] Failed to set autonomous navigation mode:", err);
+      });
+      
       if (typeof window !== "undefined") {
         const savedUrl = localStorage.getItem("rosbridge_ws_url");
         if (savedUrl) {
@@ -718,84 +829,37 @@ export function MapPlanningModal({ isOpen, onClose, onSwitchToManual }: MapPlann
         }
         setIsInstructionsOpen(false);
       }
-    } else if (prevIsOpenRef.current) {
-      // Only reset state when modal is explicitly closed (was open → now closed)
-      // NOT on initial mount when isOpen starts as false
-      prevIsOpenRef.current = false;
-      disconnectRos();
-      setSelectedPoint(null);
-      setSentStatus("idle");
-      setNavStatus("IDLE");
-      setMapSource("none");
-      offscreenCanvasRef.current = null;
     }
+  }, [isOpen]);
+
+  // Clean up ROS connection only when component unmounts
+  useEffect(() => {
     return () => {
       disconnectRos();
     };
-  }, [isOpen]);
-
-  // Listen to saved maps and map action status from Firebase when modal is open
-  useEffect(() => {
-    if (!isOpen) return;
-
-    const unsubSaved = listenToSavedMaps(
-      (maps) => {
-        setSavedMaps(maps);
-      },
-      (err) => console.error("[MapPlanningModal] listenToSavedMaps error:", err)
-    );
-
-    const unsubAction = listenToMapAction(
-      (state) => {
-        setMapActionState(state);
-
-        // Update loading/saving indicators based on status updates from Orange Pi
-        if (state.status === "SUCCESS") {
-          if (state.action === "SAVE") {
-            setIsSavingMap(false);
-            setSaveStatus("success");
-            setNewMapName("");
-            setTimeout(() => setSaveStatus("idle"), 4000);
-            resetMapAction().catch((e) => console.error("Failed to reset map action:", e));
-          } else if (state.action === "LOAD") {
-            setLoadingMapId(null);
-            resetMapAction().catch((e) => console.error("Failed to reset map action:", e));
-          }
-        } else if (state.status === "ERROR") {
-          if (state.action === "SAVE") {
-            setIsSavingMap(false);
-            setSaveStatus("error");
-            setTimeout(() => setSaveStatus("idle"), 4000);
-            resetMapAction().catch((e) => console.error("Failed to reset map action:", e));
-          } else if (state.action === "LOAD") {
-            setLoadingMapId(null);
-            alert(`Gagal memuat peta: ${state.mapName || ""}`);
-            resetMapAction().catch((e) => console.error("Failed to reset map action:", e));
-          }
-        }
-      },
-      (err) => console.error("[MapPlanningModal] listenToMapAction error:", err)
-    );
-
-    return () => {
-      unsubSaved();
-      unsubAction();
-    };
-  }, [isOpen]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   if (!isOpen) return null;
 
   const handleGridClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    // Ignore click if user was panning
+    if (isPanningRef.current) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
     const clickX = e.clientX - rect.left;
     const clickY = e.clientY - rect.top;
 
-    const pctX = clickX / rect.width;
-    const pctY = clickY / rect.height;
+    const zoom = zoomRef.current;
+    const pan = panRef.current;
+    const W = rect.width;
+    const H = rect.height;
 
     const b = boundsRef.current;
+    const pctX = (clickX - pan.x) / (W * zoom);
+    const pctY = (clickY - pan.y) / (H * zoom);
+
     const xMeters = b.minX + pctX * (b.maxX - b.minX);
     const yMeters = b.maxY - pctY * (b.maxY - b.minY);
 
@@ -806,14 +870,81 @@ export function MapPlanningModal({ isOpen, onClose, onSwitchToManual }: MapPlann
     setSentStatus("idle");
   };
 
+  // Zoom handlers (click-based)
+  const handleZoomIn = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const centerX = rect.width / 2;
+    const centerY = rect.height / 2;
+
+    const oldZoom = zoomRef.current;
+    const newZoom = Math.min(oldZoom * 1.5, 20);
+
+    const pan = panRef.current;
+    panRef.current = {
+      x: centerX - (centerX - pan.x) * (newZoom / oldZoom),
+      y: centerY - (centerY - pan.y) * (newZoom / oldZoom),
+    };
+    zoomRef.current = newZoom;
+  };
+
+  const handleZoomOut = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const centerX = rect.width / 2;
+    const centerY = rect.height / 2;
+
+    const oldZoom = zoomRef.current;
+    const newZoom = Math.max(oldZoom / 1.5, 0.3);
+
+    const pan = panRef.current;
+    panRef.current = {
+      x: centerX - (centerX - pan.x) * (newZoom / oldZoom),
+      y: centerY - (centerY - pan.y) * (newZoom / oldZoom),
+    };
+    zoomRef.current = newZoom;
+  };
+
+  // Pan handlers (mouse drag)
+  const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (e.button === 0 || e.button === 1) {
+      isPanningRef.current = false;
+      panStartRef.current = { x: e.clientX, y: e.clientY };
+      panStartOffsetRef.current = { ...panRef.current };
+    }
+  };
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (e.buttons === 0) return;
+    const dx = e.clientX - panStartRef.current.x;
+    const dy = e.clientY - panStartRef.current.y;
+    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+      isPanningRef.current = true;
+    }
+    panRef.current = {
+      x: panStartOffsetRef.current.x + dx,
+      y: panStartOffsetRef.current.y + dy,
+    };
+  };
+
+  const handleMouseUp = () => {
+    // Small delay to prevent click from firing after pan
+    setTimeout(() => { isPanningRef.current = false; }, 50);
+  };
+
+  // Reset zoom/pan
+  const handleResetView = () => {
+    zoomRef.current = 1.0;
+    panRef.current = { x: 0, y: 0 };
+  };
+
   const handleSendGoal = async () => {
     if (!selectedPoint) return;
     setIsSending(true);
     setSentStatus("idle");
     try {
-      // Explicitly switch to autonomous mode ONLY when user sends a nav goal
-      await setNavigationMode(true);
-
       // Send target coordinates to Firebase -> bridge reads -> Nav2 Action Client
       // This is the ONLY correct path for Nav2 A* path planning.
       // The bridge uses NavigateToPose action interface which properly triggers
@@ -827,33 +958,6 @@ export function MapPlanningModal({ isOpen, onClose, onSwitchToManual }: MapPlann
       setSentStatus("error");
     } finally {
       setIsSending(false);
-    }
-  };
-
-  const handleSaveMap = async () => {
-    const mapName = newMapName.trim() || `Peta ${new Date().toLocaleString("id-ID")}`;
-    setIsSavingMap(true);
-    setSaveStatus("idle");
-    try {
-      await triggerMapAction("SAVE", mapName);
-      console.log("[MapPlanning] Triggered map SAVE action:", mapName);
-    } catch (err) {
-      console.error("[MapPlanning] Failed to trigger map save:", err);
-      setIsSavingMap(false);
-      setSaveStatus("error");
-      setTimeout(() => setSaveStatus("idle"), 4000);
-    }
-  };
-
-  const handleLoadMap = async (map: SavedMap) => {
-    setLoadingMapId(map.id);
-    try {
-      await triggerMapAction("LOAD", map.name);
-      console.log("[MapPlanning] Triggered map LOAD action:", map.name);
-    } catch (err) {
-      console.error("[MapPlanning] Failed to trigger map load:", err);
-      setLoadingMapId(null);
-      alert(`Gagal mengirim perintah muat peta: ${err instanceof Error ? err.message : err}`);
     }
   };
 
@@ -933,9 +1037,12 @@ export function MapPlanningModal({ isOpen, onClose, onSwitchToManual }: MapPlann
             <canvas
               ref={canvasRef}
               onClick={handleGridClick}
-              width={800}
-              height={800}
+              onMouseDown={handleMouseDown}
+              onMouseMove={handleMouseMove}
+              onMouseUp={handleMouseUp}
+              onMouseLeave={handleMouseUp}
               className="absolute inset-0 w-full h-full cursor-crosshair object-contain z-10"
+              style={{ touchAction: "none" }}
             />
 
             {/* Data Source Badge */}
@@ -950,10 +1057,48 @@ export function MapPlanningModal({ isOpen, onClose, onSwitchToManual }: MapPlann
               {mapSource === "none" && <><WifiOff className="w-2.5 h-2.5" /> No Data</>}
             </div>
 
+            {/* Zoom Controls */}
+            <div className="absolute right-2 top-2 z-20 flex flex-col gap-1">
+              <button 
+                onClick={handleZoomIn}
+                className="w-7 h-7 flex items-center justify-center bg-slate-900/80 border border-slate-700/50 rounded hover:bg-slate-800 transition-colors text-slate-300"
+                title="Zoom In"
+              >
+                <Plus className="w-4 h-4" />
+              </button>
+              <button 
+                onClick={handleZoomOut}
+                className="w-7 h-7 flex items-center justify-center bg-slate-900/80 border border-slate-700/50 rounded hover:bg-slate-800 transition-colors text-slate-300"
+                title="Zoom Out"
+              >
+                <Minus className="w-4 h-4" />
+              </button>
+              <button 
+                onClick={handleResetView}
+                className="w-7 h-7 flex items-center justify-center bg-slate-900/80 border border-slate-700/50 rounded hover:bg-slate-800 transition-colors text-slate-300 mt-1"
+                title="Reset View"
+              >
+                <Maximize className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
             {/* Map Legend Overlay */}
-            <div className="absolute bottom-12 left-2 z-20 flex flex-col gap-1.5 p-2 rounded-xl bg-slate-950/90 border border-slate-800/80 text-[9px] font-mono text-slate-200 pointer-events-none shadow-lg">
+            <div className="absolute bottom-12 left-2 z-20 flex flex-col gap-1 p-2 rounded-lg bg-slate-950/90 border border-slate-800/80 text-[9px] font-mono text-slate-200 pointer-events-none shadow-lg backdrop-blur-sm">
               <div className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#00F2FF]" />
+                <span className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: "rgb(11, 14, 20)" }} />
+                <span>Free Space</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-sm bg-[#38BDF8]" />
+                <span>Obstacle</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: "rgb(21, 28, 38)" }} />
+                <span>Unknown</span>
+              </div>
+              <div className="w-full h-px bg-slate-700/50 my-0.5" />
+              <div className="flex items-center gap-1.5">
+                <span className="w-0 h-0 border-t-[4px] border-t-transparent border-b-[4px] border-b-transparent border-l-[7px] border-l-[#00F2FF]" />
                 <span>Robot</span>
               </div>
               <div className="flex items-center gap-1.5">
@@ -962,11 +1107,11 @@ export function MapPlanningModal({ isOpen, onClose, onSwitchToManual }: MapPlann
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="w-3.5 h-0.5 border-t border-dashed border-[#00F2FF]" />
-                <span>Jalur A*</span>
+                <span>Path A*</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#FF0055]" />
-                <span>LiDAR Scan</span>
+                <span className="w-1.5 h-1.5 bg-[#FF0055]" />
+                <span>LiDAR</span>
               </div>
             </div>
 
@@ -1115,85 +1260,6 @@ export function MapPlanningModal({ isOpen, onClose, onSwitchToManual }: MapPlann
                       <span className="absolute right-2 text-[10px] text-slate-500 pointer-events-none">m</span>
                     </div>
                   </div>
-                </div>
-              </div>
-
-              {/* Save / Load Maps Card */}
-              <div className="p-3 lg:p-4 rounded-xl bg-slate-900/50 border border-slate-800 space-y-3">
-                <div className="text-[10px] lg:text-xs font-semibold text-slate-300 flex items-center gap-1">
-                  <MapPin className="w-3.5 h-3.5" style={{ color: C.neon }} />
-                  Penyimpanan Peta (Save/Load)
-                </div>
-                
-                {/* Save Map Section */}
-                <div className="space-y-1.5 border-b border-slate-800/80 pb-3">
-                  <label htmlFor="map-name-input" className="text-[9px] text-slate-400 block uppercase font-bold">Simpan Peta Saat Ini</label>
-                  <div className="flex gap-1.5">
-                    <input
-                      id="map-name-input"
-                      type="text"
-                      value={newMapName}
-                      onChange={(e) => setNewMapName(e.target.value)}
-                      placeholder="Nama Peta (mis: Lantai 1)"
-                      disabled={isSavingMap}
-                      className="flex-1 bg-black/40 border border-slate-800 rounded px-2 py-1 text-[11px] text-white outline-none focus:border-cyan-500/50 disabled:opacity-60"
-                    />
-                    <button
-                      onClick={handleSaveMap}
-                      disabled={isSavingMap}
-                      className="px-2.5 py-1 rounded bg-cyan-500 hover:bg-cyan-400 disabled:bg-slate-800 disabled:text-slate-600 text-black text-[10px] font-bold uppercase transition-all duration-200 border-0 cursor-pointer min-h-[28px] flex items-center gap-1"
-                    >
-                      {isSavingMap ? (
-                        <>
-                          <Loader2 className="w-3 h-3 animate-spin" />
-                          Simpan
-                        </>
-                      ) : (
-                        "Simpan"
-                      )}
-                    </button>
-                  </div>
-                  {saveStatus === "success" && (
-                    <p className="text-[9px] text-emerald-400 font-bold mt-1">✓ Peta tersimpan di Orange Pi!</p>
-                  )}
-                  {saveStatus === "error" && (
-                    <p className="text-[9px] text-red-400 font-bold mt-1">✗ Gagal menyimpan peta.</p>
-                  )}
-                </div>
-
-                {/* Load Map Section */}
-                <div className="space-y-1.5">
-                  <span className="text-[9px] text-slate-400 block uppercase font-bold">Daftar Peta Tersimpan</span>
-                  {savedMaps.length === 0 ? (
-                    <p className="text-[9px] text-slate-500 italic py-1">Belum ada peta yang disimpan.</p>
-                  ) : (
-                    <div className="max-h-[120px] overflow-y-auto space-y-1.5 pr-1">
-                      {savedMaps.map((map) => (
-                        <div
-                          key={map.id}
-                          className="flex justify-between items-center p-1.5 rounded bg-black/30 border border-slate-800/60 hover:border-slate-800 transition-colors"
-                        >
-                          <div className="min-w-0 flex-1">
-                            <div className="text-[10px] text-slate-200 font-medium truncate">{map.name}</div>
-                            <div className="text-[8px] text-slate-500 font-mono">
-                              {new Date(map.timestamp).toLocaleDateString("id-ID")}
-                            </div>
-                          </div>
-                          <button
-                            onClick={() => handleLoadMap(map)}
-                            disabled={loadingMapId !== null}
-                            className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 disabled:bg-slate-900 disabled:text-slate-700 text-[8px] text-slate-300 font-bold uppercase transition-all duration-200 border border-slate-700/50 cursor-pointer"
-                          >
-                            {loadingMapId === map.id ? (
-                              <Loader2 className="w-2.5 h-2.5 animate-spin" />
-                            ) : (
-                              "Muat"
-                            )}
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
                 </div>
               </div>
             </div>

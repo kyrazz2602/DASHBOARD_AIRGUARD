@@ -78,26 +78,6 @@ export interface RobotPose {
   timestamp: string;
 }
 
-/**
- * Representasi data peta yang disimpan di database
- */
-export interface SavedMap {
-  id: string;
-  name: string;
-  timestamp: number;
-  grid?: MapGridData;
-}
-
-/**
- * Status aksi penyimpanan/pemuatan peta
- */
-export interface MapActionState {
-  action: "SAVE" | "LOAD" | "IDLE";
-  mapName?: string;
-  status: "PENDING" | "SUCCESS" | "ERROR" | "IDLE";
-  timestamp?: number;
-}
-
 // ============================================================================
 // 2. DATABASE PATHS & HELPER
 // ============================================================================
@@ -111,8 +91,6 @@ const MAP_GRID_PATH = "Map/grid";
 const MAP_SCAN_PATH = "Map/scan_points";
 const MAP_PATH_PATH = "Map/path";
 const MAP_POSE_PATH = "Map/robot_pose";
-const SAVED_MAPS_PATH = "SavedMaps";
-const MAP_ACTION_PATH = "Command/map_action";
 
 /**
  * Memastikan Firebase database terinisialisasi sebelum melakukan operasi
@@ -155,7 +133,6 @@ export function listenToSensorData(
           suhu: Number(data.Suhu !== undefined ? data.Suhu : data.suhu) || 25,
           tegangan: Number(data.Tegangan !== undefined ? data.Tegangan : data.tegangan) || 0,
           battery: Number(data.Persentase !== undefined ? data.Persentase : (data.battery !== undefined ? data.battery : data.Battery)) || 0,
-          arus: Number(data.Arus !== undefined ? data.Arus : data.arus) || 0,
           timestamp: new Date(),
         };
         callback(sensorReading);
@@ -653,7 +630,6 @@ export async function getHistoricalData(
               suhu: Number(values.suhu !== undefined ? values.suhu : values.Suhu) || 0,
               tegangan: Number(values.tegangan !== undefined ? values.tegangan : values.Tegangan) || 0,
               battery: Number(values.battery !== undefined ? values.battery : (values.Persentase !== undefined ? values.Persentase : values.Battery)) || 0,
-              arus: Number(values.arus !== undefined ? values.arus : values.Arus) || 0,
             });
           }
         });
@@ -673,12 +649,8 @@ export async function getHistoricalData(
   });
 }
 
-/** Jeda singkat agar Orange Pi bridge mendeteksi transisi false → true */
-const WIFI_TRIGGER_PULSE_MS = 200;
-
 /**
- * Mengirim perintah koneksi WiFi baru ke /Command/wifi di Firebase.
- * Reset trigger ke false dulu supaya percobaan ulang selalu terdeteksi bridge.
+ * Mengirim perintah koneksi WiFi baru ke /Command/wifi di Firebase
  */
 export async function triggerWifiChange(ssid: string, password: string): Promise<void> {
   if (!isDbReady()) {
@@ -686,8 +658,6 @@ export async function triggerWifiChange(ssid: string, password: string): Promise
     return;
   }
   const wifiRef = ref(database, `${COMMAND_PATH}/wifi`);
-  await update(wifiRef, { trigger: false });
-  await new Promise((resolve) => setTimeout(resolve, WIFI_TRIGGER_PULSE_MS));
   await set(wifiRef, {
     ssid,
     password,
@@ -728,33 +698,6 @@ export function listenToWifiStatus(
 }
 
 /**
- * Membersihkan/reset status WiFi di Firebase (/Status/wifi_status dan /Status/wifi_error)
- */
-export async function clearWifiStatus(): Promise<void> {
-  if (!isDbReady()) return;
-  const statusRef = ref(database, STATUS_PATH);
-  await update(statusRef, {
-    wifi_status: "",
-    wifi_error: "",
-  });
-}
-
-/**
- * Mendapatkan timestamp pembaruan perintah WiFi terakhir dari /Command/wifi/updatedAt
- */
-export async function getWifiCommandTimestamp(): Promise<number> {
-  if (!isDbReady()) return 0;
-  const wifiRef = ref(database, `${COMMAND_PATH}/wifi`);
-  const snapshot = await get(wifiRef);
-  if (snapshot.exists()) {
-    const data = snapshot.val();
-    return data.updatedAt || 0;
-  }
-  return 0;
-}
-
-
-/**
  * Mendengarkan daftar SSID WiFi yang terdeteksi oleh Orange Pi dari /Status/detected_wifis
  */
 export function listenToDetectedWifis(
@@ -787,8 +730,7 @@ export function listenToDetectedWifis(
 }
 
 /**
- * Memicu Orange Pi untuk melakukan pemindaian WiFi baru.
- * Reset scan_trigger ke false dulu supaya pemindaian ulang selalu terdeteksi bridge.
+ * Memicu Orange Pi untuk melakukan pemindaian WiFi baru
  */
 export async function triggerWifiScan(): Promise<void> {
   if (!isDbReady()) {
@@ -796,114 +738,7 @@ export async function triggerWifiScan(): Promise<void> {
     return;
   }
   const scanTriggerRef = ref(database, `${COMMAND_PATH}/wifi`);
-  await update(scanTriggerRef, { scan_trigger: false });
-  await new Promise((resolve) => setTimeout(resolve, WIFI_TRIGGER_PULSE_MS));
   await update(scanTriggerRef, {
     scan_trigger: true,
-    updatedAt: Date.now(),
   });
-}
-
-/**
- * Memicu Orange Pi untuk melakukan penyimpanan (SAVE) atau pemuatan (LOAD) peta SLAM
- */
-export async function triggerMapAction(action: "SAVE" | "LOAD", mapName: string): Promise<void> {
-  if (!isDbReady()) {
-    console.warn("[triggerMapAction] Firebase Database not initialized.");
-    return;
-  }
-  const actionRef = ref(database, MAP_ACTION_PATH);
-  await set(actionRef, {
-    action,
-    mapName,
-    status: "PENDING",
-    timestamp: Date.now(),
-  });
-}
-
-/**
- * Mereset status aksi peta di Firebase kembali ke IDLE
- */
-export async function resetMapAction(): Promise<void> {
-  if (!isDbReady()) return;
-  const actionRef = ref(database, MAP_ACTION_PATH);
-  await set(actionRef, {
-    action: "IDLE",
-    status: "IDLE",
-    timestamp: Date.now(),
-  });
-}
-
-/**
- * Mendengarkan status aksi pemetaan saat ini secara real-time dari /Command/map_action
- */
-export function listenToMapAction(
-  callback: (state: MapActionState) => void,
-  onError?: (error: Error) => void,
-): () => void {
-  if (!isDbReady()) {
-    console.warn("[listenToMapAction] Firebase Database not initialized.");
-    return () => {};
-  }
-  const actionRef = ref(database, MAP_ACTION_PATH);
-  const listener = onValue(
-    actionRef,
-    (snapshot: DataSnapshot) => {
-      const data = snapshot.val();
-      if (data) {
-        callback({
-          action: data.action || "IDLE",
-          mapName: data.mapName,
-          status: data.status || "IDLE",
-          timestamp: data.timestamp,
-        });
-      } else {
-        callback({ action: "IDLE", status: "IDLE" });
-      }
-    },
-    (error: Error) => {
-      console.error("[listenToMapAction] Firebase error:", error);
-      if (onError) onError(error);
-    },
-  );
-  return () => off(actionRef, "value", listener);
-}
-
-/**
- * Mendengarkan daftar peta tersimpan secara real-time dari /SavedMaps
- */
-export function listenToSavedMaps(
-  callback: (maps: SavedMap[]) => void,
-  onError?: (error: Error) => void,
-): () => void {
-  if (!isDbReady()) {
-    console.warn("[listenToSavedMaps] Firebase Database not initialized.");
-    return () => {};
-  }
-  const savedMapsRef = ref(database, SAVED_MAPS_PATH);
-  const listener = onValue(
-    savedMapsRef,
-    (snapshot: DataSnapshot) => {
-      const data = snapshot.val();
-      if (data) {
-        const mapsList: SavedMap[] = Object.entries(data)
-          .map(([key, value]: [string, any]) => ({
-            id: key,
-            name: value.name || "Peta Tanpa Nama",
-            timestamp: Number(value.timestamp) || Date.now(),
-            grid: value.grid,
-          }))
-          .sort((a, b) => b.timestamp - a.timestamp);
-        callback(mapsList);
-      } else {
-        callback([]);
-      }
-    },
-    (error: Error) => {
-      console.error("[listenToSavedMaps] Firebase error:", error);
-      if (onError) onError(error);
-    },
-  );
-  return () => off(savedMapsRef, "value", listener);
-}
-
+}
