@@ -553,8 +553,7 @@ export function MapPlanningModal({ isOpen, onClose, onSwitchToManual }: MapPlann
         }
 
         // Fallback to Firebase status values if not connected via websocket
-        // and no pose from Map/robot_pose
-        if (connStatus !== "connected" && !poseRef.current) {
+        if (connStatusRef.current !== "connected") {
           if (status.x !== undefined && status.y !== undefined && status.yaw !== undefined) {
             poseRef.current = {
               x: status.x,
@@ -572,7 +571,7 @@ export function MapPlanningModal({ isOpen, onClose, onSwitchToManual }: MapPlann
     return () => {
       unsubscribeStatus();
     };
-  }, [connStatus]);
+  }, []);
 
   // Canvas drawing loop
   useEffect(() => {
