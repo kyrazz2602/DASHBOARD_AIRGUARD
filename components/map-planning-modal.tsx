@@ -142,6 +142,11 @@ export function MapPlanningModal({ isOpen, onClose, onSwitchToManual }: MapPlann
     selectedPointRef.current = selectedPoint;
   }, [selectedPoint]);
 
+  const connStatusRef = useRef(connStatus);
+  useEffect(() => {
+    connStatusRef.current = connStatus;
+  }, [connStatus]);
+
   // WebSocket Connection Handlers
   const disconnectRos = () => {
     if (mapSubRef.current) {
@@ -390,6 +395,7 @@ export function MapPlanningModal({ isOpen, onClose, onSwitchToManual }: MapPlann
     // Subscribe to Firebase map grid data
     const unsubGrid = listenToMapGrid(
       (gridData: MapGridData) => {
+        if (connStatusRef.current === "connected") return;
         setMapSource("firebase");
         const { width, height, resolution, origin_x, origin_y, data_b64 } = gridData;
 
@@ -505,6 +511,7 @@ export function MapPlanningModal({ isOpen, onClose, onSwitchToManual }: MapPlann
     // Subscribe to Firebase scan points
     const unsubScan = listenToScanPoints(
       (data: ScanPointsData) => {
+        if (connStatusRef.current === "connected") return;
         scansRef.current = data.points;
       },
       (error) => console.error("[Firebase Scan Points] error:", error)
@@ -513,6 +520,7 @@ export function MapPlanningModal({ isOpen, onClose, onSwitchToManual }: MapPlann
     // Subscribe to Firebase A* path
     const unsubPath = listenToMapPath(
       (data: MapPathData) => {
+        if (connStatusRef.current === "connected") return;
         pathRef.current = data.points;
       },
       (error) => console.error("[Firebase Map Path] error:", error)
@@ -521,6 +529,7 @@ export function MapPlanningModal({ isOpen, onClose, onSwitchToManual }: MapPlann
     // Subscribe to Firebase robot pose
     const unsubPose = listenToRobotPose(
       (pose: RobotPose) => {
+        if (connStatusRef.current === "connected") return;
         poseRef.current = { x: pose.x, y: pose.y, yaw: pose.yaw };
       },
       (error) => console.error("[Firebase Robot Pose] error:", error)
